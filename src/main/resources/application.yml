@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: agentscope-java-backend
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  tomcat:
+    uri-encoding: UTF-8
+
+# 大模型服务配置
+model:
+  defaultService: dashscope
+  services:
+    dashscope:
+      api-key: sk-***************************
+      base-url: https://dashscope.aliyuncs.com/api/v1
+      model: qwen-turbo
+
+# 天气查询API配置（高德天气）
+weather:
+  api-key: **********************************
+  base-url: https://restapi.amap.com/v3/weather/weatherInfo
