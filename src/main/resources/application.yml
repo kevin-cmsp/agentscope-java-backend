@@ -16,11 +16,11 @@ model:
   defaultService: dashscope
   services:
     dashscope:
-      api-key: sk-45718b81523c40628ead522f750d523d
+      api-key: sk-xxxxxxxxx
       base-url: https://dashscope.aliyuncs.com/api/v1
       model: qwen-turbo
 
 # 天气查询API配置（高德天气）
 weather:
-  api-key: ede7b9c6ece1ed8c8f966e1419b48875
+  api-key: ede7bxxxxxxxxxxxxxxx966e1419b48875
   base-url: https://restapi.amap.com/v3/weather/weatherInfo
