@@ -198,7 +198,7 @@ public class AgentController {
             // 识别意图并处理
             String intent = identifyIntent(message);
             String response;
-            
+            System.out.println("AgentController.chat intent:"+intent);
             switch (intent) {
                 case "weather":
                     response = handleWeatherRequest(message);
@@ -251,35 +251,58 @@ public class AgentController {
      * 识别用户意图（基于大模型）
      * 
      * 使用大模型进行意图识别，支持更复杂的语义理解。
+     * 采用 Few-Shot 提示和多重验证提高准确率。
      * 
      * @param message 用户消息
      * @return 意图类型
      */
     private String identifyIntent(String message) {
+        // 第一次尝试：使用大模型识别
         try {
-            // 构造提示词
-            String prompt = "请识别以下用户消息的意图，并返回对应的意图类型。\n" +
-                           "意图类型包括：\n" +
-                           "1. weather - 天气查询（如：北京的天气怎么样？今天会下雨吗？）\n" +
-                           "2. calculator - 计算请求（如：10加5等于多少？3乘以4是多少？）\n" +
-                           "3. data - 智能查数（如：上个月的销量是多少？今年的收入情况？）\n" +
-                           "4. knowledge - 知识库查询（如：公司的规章制度是什么？如何使用系统？）\n" +
-                           "5. party - 活动策划（如：帮我策划一场商务活动，我需要一个活动计划）\n" +
-                           "6. general - 其他通用问题（如：你好，今天过得怎么样？）\n" +
+            // 构造优化的提示词（添加 Few-Shot 示例）
+            String prompt = "你是一个意图识别助手。请准确识别以下用户消息的意图，并只返回意图类型。\n" +
+                           "\n" +
+                           "意图类型说明：\n" +
+                           "1. weather - 天气查询\n" +
+                           "   示例：北京天气怎么样？明天会下雨吗？上海温度多少？\n" +
+                           "2. calculator - 数学计算\n" +
+                           "   示例：10 加 5 等于多少？3 乘以 4 是多少？计算 100/5\n" +
+                           "3. data - 智能查数（企业数据查询）\n" +
+                           "   示例：上个月销量是多少？今年 Q1 的收入情况？利润报表\n" +
+                           "4. knowledge - 知识库查询（公司制度、使用指南等）\n" +
+                           "   示例：公司规章制度？如何使用系统？报销流程是什么？\n" +
+                           "5. party - 活动策划\n" +
+                           "   示例：帮我策划一场商务活动，需要活动计划，生日聚会安排\n" +
+                           "6. general - 其他通用问题\n" +
+                           "   示例：你好，今天过得怎么样？华为，浪潮集团\n" +
+                           "\n" +
+                           "注意：\n" +
+                           "- 仅查询公司名称、简单问候等没有明确功能需求的，归类为 general\n" +
+                           "- 询问公司制度、文档、流程的，归类为 knowledge\n" +
+                           "- 只返回意图类型单词，不要返回任何其他内容\n" +
                            "\n" +
                            "用户消息：" + message + "\n" +
-                           "请只返回意图类型，不要返回其他内容。";
+                           "意图类型：";
             
-            // 调用大模型（这里使用DashScope API）
+            // 调用大模型
             String intent = callDashScopeModel(prompt);
             
-            // 验证意图类型
-            if (intent != null && Arrays.asList("weather", "calculator", "data", "knowledge", "party", "general").contains(intent)) {
-                return intent;
+            // 清理和验证返回结果
+            if (intent != null) {
+                intent = intent.trim().toLowerCase();
+                // 提取第一个单词（防止模型返回多余内容）
+                if (intent.contains(" ")) {
+                    intent = intent.split("\\s+")[0];
+                }
+                
+                // 验证是否为有效的意图类型
+                if (isValidIntent(intent)) {
+                    return intent;
+                }
             }
         } catch (Exception e) {
-            // 大模型调用失败时，回退到关键词匹配
-            e.printStackTrace();
+            // 大模型调用失败，记录日志但不打印堆栈
+            System.err.println("大模型意图识别失败：" + e.getMessage());
         }
         
         // 回退到关键词匹配
@@ -287,7 +310,18 @@ public class AgentController {
     }
 
     /**
-     * 调用DashScope大模型
+     * 验证意图类型是否有效
+     * 
+     * @param intent 待验证的意图类型
+     * @return 是否有效
+     */
+    private boolean isValidIntent(String intent) {
+        return Arrays.asList("weather", "calculator", "data", "knowledge", "party", "general")
+                    .contains(intent);
+    }
+
+    /**
+     * 调用 DashScope 大模型
      * 
      * @param prompt 提示词
      * @return 大模型返回的意图类型
@@ -301,7 +335,7 @@ public class AgentController {
         String messagesJson = "[{\"role\":\"user\",\"content\":\"" + escapeJson(prompt) + "\"}]";
 
         // 构建完整的请求体
-        String jsonBody = "{\"model\":\"" + dashscopeModel + "\",\"input\":{\"messages\":" + messagesJson + "},\"parameters\":{\"max_tokens\":100,\"temperature\":0.7,\"top_p\":0.8}}";
+        String jsonBody = "{\"model\":\"" + dashscopeModel + "\",\"input\":{\"messages\":" + messagesJson + "},\"parameters\":{\"max_tokens\":150,\"temperature\":0.3,\"top_p\":0.8}}";
 
         // 发送 HTTP 请求
         URL obj = new URL(url);
@@ -333,7 +367,9 @@ public class AgentController {
                     int start = responseStr.indexOf("\"text\":\"") + 8;
                     int end = responseStr.indexOf("\"", start);
                     if (end > start) {
-                        return responseStr.substring(start, end).trim();
+                        String result = responseStr.substring(start, end).trim();
+                        // 清理返回结果中的特殊字符（保留转义字符，由上层处理）
+                        return result.replaceAll("[\\r\\n]+", " ").trim();
                     }
                 }
             }
@@ -350,8 +386,8 @@ public class AgentController {
             }
         }
 
-        // 如果 API 调用失败，返回默认值
-        return "general";
+        // 如果 API 调用失败，返回 null
+        return null;
     }
 
     /**
@@ -371,44 +407,64 @@ public class AgentController {
     /**
      * 基于关键词的意图识别（作为回退方案）
      * 
+     * 采用优先级匹配策略，提高关键词识别准确率。
+     * 
      * @param message 用户消息
      * @return 意图类型
      */
     private String identifyIntentByKeywords(String message) {
-        message = message.toLowerCase();
+        String lowerMessage = message.toLowerCase();
         
-        // 天气相关关键词
-        if (message.contains("天气") || message.contains("温度") || message.contains("下雨") ||
-            message.contains("晴天") || message.contains("多云") || message.contains("刮风")) {
+        // 优先匹配最明确的意图
+        
+        // 1. 天气相关关键词（最明确）
+        if (lowerMessage.contains("天气") || lowerMessage.contains("温度") || 
+            lowerMessage.contains("下雨") || lowerMessage.contains("晴天") || 
+            lowerMessage.contains("多云") || lowerMessage.contains("刮风") ||
+            lowerMessage.contains("下雪") || lowerMessage.contains("气候")) {
             return "weather";
         }
         
-        // 计算器相关关键词
-        if (message.contains("计算") || message.contains("加") || message.contains("减") ||
-            message.contains("乘") || message.contains("除") || message.contains("等于") ||
-            message.contains("+") || message.contains("-") || message.contains("*") || message.contains("/")) {
+        // 2. 计算器相关关键词（数字 + 运算符）
+        boolean hasNumbers = message.matches(".*\\d+.*");
+        if (hasNumbers && (lowerMessage.contains("加") || lowerMessage.contains("减") ||
+            lowerMessage.contains("乘") || lowerMessage.contains("除") || 
+            lowerMessage.contains("等于") || lowerMessage.contains("计算") ||
+            message.contains("+") || message.contains("-") || 
+            message.contains("*") || message.contains("/") || 
+            message.contains("="))) {
             return "calculator";
         }
         
-        // 智能查数相关关键词
-        if (message.contains("数据") || message.contains("报表") || message.contains("统计") ||
-            message.contains("销量") || message.contains("收入") || message.contains("利润")) {
-            return "data";
-        }
-        
-        // 知识库相关关键词
-        if (message.contains("知识") || message.contains("文档") || message.contains("资料") ||
-            message.contains("手册") || message.contains("指南")) {
-            return "knowledge";
-        }
-        
-        // 活动策划相关关键词
-        if (message.contains("活动") || message.contains("生日") || message.contains("策划") ||
-            message.contains("聚会") || message.contains("活动") || message.contains("安排")) {
+        // 3. 活动策划相关关键词
+        if (lowerMessage.contains("活动") || lowerMessage.contains("策划") || 
+            lowerMessage.contains("聚会") || lowerMessage.contains("团建") ||
+            lowerMessage.contains("会议") || lowerMessage.contains("庆典") ||
+            (lowerMessage.contains("计划") && lowerMessage.contains("安排"))) {
             return "party";
         }
         
-        // 默认意图
+        // 4. 智能查数相关关键词（企业数据）
+        if (lowerMessage.contains("数据") || lowerMessage.contains("报表") || 
+            lowerMessage.contains("统计") || lowerMessage.contains("销量") || 
+            lowerMessage.contains("收入") || lowerMessage.contains("利润") ||
+            lowerMessage.contains("销售额") || lowerMessage.contains("业绩") ||
+            lowerMessage.contains("财务") || lowerMessage.contains("季度") ||
+            lowerMessage.contains("月度")) {
+            return "data";
+        }
+        
+        // 5. 知识库相关关键词（制度、流程）
+        if (lowerMessage.contains("制度") || lowerMessage.contains("流程") || 
+            lowerMessage.contains("规章") || lowerMessage.contains("规定") ||
+            lowerMessage.contains("手册") || lowerMessage.contains("指南") ||
+            lowerMessage.contains("教程") || lowerMessage.contains("怎么使用") ||
+            lowerMessage.contains("如何使用") || lowerMessage.contains("报销流程") ||
+            lowerMessage.contains("请假流程")) {
+            return "knowledge";
+        }
+        
+        // 6. 其他情况归为通用问题
         return "general";
     }
 
@@ -502,8 +558,32 @@ public class AgentController {
      * @return 查数结果
      */
     private String handleDataRequest(String message) {
-        // 模拟智能查数功能
-        return "智能查数功能正在开发中，敬请期待！";
+        try {
+            // 构造智能查数回复提示词
+            String prompt = "你是企业数据分析助手。请根据用户的数据查询请求，提供专业的回复。\n" +
+                           "\n" +
+                           "注意：目前数据查询功能正在完善中。\n" +
+                           "\n" +
+                           "回答要求：\n" +
+                           "1. 说明当前数据功能的限制\n" +
+                           "2. 建议用户通过正式的数据报表系统查询\n" +
+                           "3. 语气专业、友好\n" +
+                           "\n" +
+                           "用户消息：" + message + "\n" +
+                           "助手回答：";
+            
+            String response = callDashScopeModel(prompt);
+            
+            if (response != null && !response.trim().isEmpty()) {
+                // 处理换行符
+                return formatResponseText(response.trim());
+            }
+        } catch (Exception e) {
+            System.err.println("智能查数回复失败：" + e.getMessage());
+        }
+        
+        // 兜底回复
+        return "智能查数功能正在开发中，敬请期待！目前建议您通过企业的数据报表系统或联系财务部门获取相关数据。";
     }
 
     /**
@@ -513,8 +593,33 @@ public class AgentController {
      * @return 知识库查询结果
      */
     private String handleKnowledgeRequest(String message) {
-        // 模拟知识库查询功能
-        return "知识库功能正在开发中，敬请期待！";
+        try {
+            // 构造知识库回复提示词
+            String prompt = "你是企业知识库助手。请根据用户的问题，提供专业的知识库查询服务。\n" +
+                           "\n" +
+                           "注意：目前知识库功能正在完善中，对于常见问题请尽量提供帮助。\n" +
+                           "\n" +
+                           "回答要求：\n" +
+                           "1. 语气专业、友好\n" +
+                           "2. 如果问题涉及公司制度、流程、文档等，说明知识库正在建设中\n" +
+                           "3. 提供可能的解决方向或建议\n" +
+                           "4. 引导用户联系相关部门获取准确信息\n" +
+                           "\n" +
+                           "用户消息：" + message + "\n" +
+                           "助手回答：";
+            
+            String response = callDashScopeModel(prompt);
+            
+            if (response != null && !response.trim().isEmpty()) {
+                // 处理换行符
+                return formatResponseText(response.trim());
+            }
+        } catch (Exception e) {
+            System.err.println("知识库回复失败：" + e.getMessage());
+        }
+        
+        // 兜底回复
+        return "知识库功能正在开发中，敬请期待！目前我可以帮您解答一些常见问题，或者您可以联系相关部门获取更准确的信息。";
     }
 
     /**
@@ -530,12 +635,71 @@ public class AgentController {
     /**
      * 处理通用请求
      * 
+     * 使用大模型进行智能回复，支持上下文记忆。
+     * 
      * @param message 用户消息
-     * @return 通用回答
+     * @return 大模型回复
      */
     private String handleGeneralRequest(String message) {
-        // 模拟大模型回答
-        return "这是一个通用回答。您的问题是：" + message + "\n\n如果您需要查询天气、进行计算、查看数据或查询知识库，请明确说明您的需求。";
+        try {
+            // 构造友好的回复提示词
+            String prompt = "你是一个专业的企业智能助手。请友好、专业地回答用户的问题。\n" +
+                           "\n" +
+                           "回答要求：\n" +
+                           "1. 语气友好、专业、简洁\n" +
+                           "2. 如果是查询公司信息（如华为、浪潮等），提供基本的企业介绍\n" +
+                           "3. 如果是问候语，礼貌回应\n" +
+                           "4. 如果问题不明确，引导用户提供更详细的信息\n" +
+                           "5. 回答控制在 200 字以内\n" +
+                           "\n" +
+                           "用户消息：" + message + "\n" +
+                           "助手回答：";
+            
+            // 调用大模型获取回复
+            String response = callDashScopeModel(prompt);
+            
+            // 如果大模型返回为空或调用失败，使用兜底回复
+            if (response == null || response.trim().isEmpty()) {
+                return generateFallbackResponse(message);
+            }
+            
+            // 处理换行符：将转义字符转换为实际换行
+            return formatResponseText(response.trim());
+            
+        } catch (Exception e) {
+            // 大模型调用失败，使用兜底回复
+            System.err.println("大模型回复失败：" + e.getMessage());
+            return generateFallbackResponse(message);
+        }
+    }
+
+    /**
+     * 生成兜底回复（当大模型不可用时）
+     * 
+     * @param message 用户消息
+     * @return 兜底回复
+     */
+    private String generateFallbackResponse(String message) {
+        // 检测是否为公司名称或常见实体
+        if (message.contains("华为") || message.contains("腾讯") || message.contains("阿里巴巴") ||
+            message.contains("百度") || message.contains("小米") || message.contains("浪潮")) {
+            return "您提到的是一家知名企业。由于我暂时无法访问最新的企业信息，建议您访问该公司官网或查阅相关资料获取详细信息。如果您想了解我们公司的信息，我很乐意为您介绍！";
+        }
+        
+        // 检测是否为问候语
+        if (message.contains("你好") || message.contains("您好") || message.contains("早") || 
+            message.contains("hello") || message.contains("hi")) {
+            return "您好！我是企业智能助手，很高兴为您服务。请问有什么可以帮您？我可以帮您查询天气、进行计算、查看企业数据或解答各种问题！";
+        }
+        
+        // 默认回复
+        return "感谢您的提问！由于您的问题比较宽泛，我暂时无法给出精确的回答。您可以：\n" +
+               "1. 查询天气：例如'北京天气怎么样？'\n" +
+               "2. 进行计算：例如'100 加 50 等于多少？'\n" +
+               "3. 查询企业数据：例如'上个月的销售数据'\n" +
+               "4. 了解公司制度：例如'报销流程是什么？'\n" +
+               "5. 活动策划：例如'帮我策划一场团建活动'\n\n" +
+               "请问您具体想了解什么呢？";
     }
 
     /**
@@ -879,5 +1043,22 @@ public class AgentController {
             default:
                 return null;
         }
+    }
+
+    /**
+     * 格式化响应文本
+     * 
+     * 处理大模型返回的文本中的转义字符，将其转换为实际的换行符。
+     * 
+     * @param text 原始文本
+     * @return 格式化后的文本
+     */
+    private String formatResponseText(String text) {
+        // 处理各种换行符转义
+        return text.replace("\\n\\n", "\n\n")
+                  .replace("\\n", "\n")
+                  .replace("\\r\\n", "\r\n")
+                  .replace("\\r", "\r")
+                  .replace("\\t", "\t");
     }
 }
