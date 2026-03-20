@@ -980,18 +980,22 @@ public class AgentController {
     @PostMapping("/skills/calculator")
     public String executeCalculator(@RequestBody Map<String, Object> request) {
         String operation = (String) request.get("operation");
-        Double a = ((Number) request.get("a")).doubleValue();
-        Double b = ((Number) request.get("b")).doubleValue();
-
+        
         if (operation == null || operation.isEmpty()) {
             return "错误：操作类型不能为空";
         }
 
-        if (a == null || b == null) {
-            return "错误：参数a和b不能为空";
+        Object aObj = request.get("a");
+        Object bObj = request.get("b");
+        
+        if (aObj == null || bObj == null) {
+            return "错误：参数 a 和 b 不能为空";
         }
 
         try {
+            double a = ((Number) aObj).doubleValue();
+            double b = ((Number) bObj).doubleValue();
+            
             String result;
             switch (operation.toLowerCase()) {
                 case "add":
@@ -1013,11 +1017,12 @@ public class AgentController {
                     return "错误：不支持的操作类型：" + operation;
             }
             
-            // 存储到记忆中
             memoryService.storeMessage("user", String.format("计算：%s(%.2f, %.2f)", operation, a, b));
             memoryService.storeMessage("assistant", result);
             
             return result;
+        } catch (ClassCastException e) {
+            return "错误：参数 a 和 b 必须是数字类型";
         } catch (Exception e) {
             return "执行计算失败：" + e.getMessage();
         }

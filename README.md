@@ -450,6 +450,554 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body
 11. ReAct Agent思考：已收集所有必要信息，生成最终方案
 12. 最终答案：输出完整的活动策划方案
 
+## 系统管理模块
+
+### 功能概述
+
+系统管理模块提供了完整的用户认证、权限管理、用户管理、角色管理和菜单管理功能，基于RBAC（Role-Based Access Control）模型设计。
+
+### 技术特点
+
+- **JWT认证**：使用JWT进行无状态认证
+- **Redis缓存**：使用Redis存储会话和权限信息
+- **RBAC模型**：支持用户-角色-权限三层映射
+- **动态权限**：前端菜单与按钮权限由后端根据用户角色实时生成
+- **审计日志**：关键操作记录操作人、时间、IP、变更内容
+
+### API接口文档
+
+#### 1. 认证接口
+
+##### 1.1 登录
+
+**接口**：`POST /api/auth/login`
+
+**请求体**：
+```json
+{ 
+   "username": "admin", 
+   "password": "123456", 
+   "captcha": "ABCD", 
+   "captchaKey": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
+**响应**：
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "nickname": "管理员",
+    "status": 0
+  }
+}
+```
+
+##### 1.2 登出
+
+**接口**：`POST /api/auth/logout`
+
+**请求头**：
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+##### 1.3 获取验证码
+
+**接口**：`GET /api/auth/captcha`
+
+**响应**：
+```json
+{
+  "captchaKey": "captcha:123456",
+  "captcha": "ABCD"
+}
+```
+
+##### 1.4 获取用户信息
+
+**接口**：`GET /api/auth/userinfo`
+
+**请求头**：
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**响应**：
+```json
+{
+  "id": 1,
+  "username": "admin",
+  "nickname": "管理员",
+  "mobile": "13800138000",
+  "email": "admin@example.com",
+  "deptId": 1,
+  "status": 0
+}
+```
+
+#### 2. 用户管理接口
+
+##### 2.1 创建用户
+
+**接口**：`POST /api/system/user`
+
+**请求体**：
+```json
+{
+  "username": "test",
+  "password": "123456",
+  "nickname": "测试用户",
+  "mobile": "13900139000",
+  "email": "test@example.com",
+  "deptId": 1,
+  "status": 0
+}
+```
+
+##### 2.2 更新用户
+
+**接口**：`PUT /api/system/user`
+
+**请求体**：
+```json
+{
+  "id": 2,
+  "nickname": "测试用户更新",
+  "mobile": "13900139001",
+  "email": "test-update@example.com",
+  "deptId": 1,
+  "status": 0
+}
+```
+
+##### 2.3 删除用户
+
+**接口**：`DELETE /api/system/user/{userId}`
+
+##### 2.4 启用/禁用用户
+
+**接口**：`PUT /api/system/user/status`
+
+**请求参数**：
+- userId：用户ID
+- status：状态（0-正常，1-禁用）
+
+##### 2.5 重置用户密码
+
+**接口**：`PUT /api/system/user/reset-password/{userId}`
+
+##### 2.6 分配角色给用户
+
+**接口**：`PUT /api/system/user/assign-roles`
+
+**请求参数**：
+- userId：用户ID
+
+**请求体**：
+```json
+[1, 2, 3]
+```
+
+##### 2.7 获取用户的角色列表
+
+**接口**：`GET /api/system/user/roles/{userId}`
+
+**响应**：
+```json
+[1, 2, 3]
+```
+
+##### 2.8 查询用户列表
+
+**接口**：`GET /api/system/user`
+
+**请求参数**：
+- username：用户名（可选）
+- mobile：手机号（可选）
+- status：状态（可选）
+
+**响应**：
+```json
+[
+  {
+    "id": 1,
+    "username": "admin",
+    "nickname": "管理员",
+    "mobile": "13800138000",
+    "email": "admin@example.com",
+    "deptId": 1,
+    "status": 0
+  },
+  {
+    "id": 2,
+    "username": "test",
+    "nickname": "测试用户",
+    "mobile": "13900139000",
+    "email": "test@example.com",
+    "deptId": 1,
+    "status": 0
+  }
+]
+```
+
+##### 2.9 根据ID获取用户信息
+
+**接口**：`GET /api/system/user/{userId}`
+
+**响应**：
+```json
+{
+  "id": 1,
+  "username": "admin",
+  "nickname": "管理员",
+  "mobile": "13800138000",
+  "email": "admin@example.com",
+  "deptId": 1,
+  "status": 0
+}
+```
+
+#### 3. 角色管理接口
+
+##### 3.1 创建角色
+
+**接口**：`POST /api/system/role`
+
+**请求体**：
+```json
+{
+  "name": "管理员",
+  "code": "ADMIN",
+  "sort": 1,
+  "dataScope": "ALL",
+  "status": 0,
+  "remark": "系统管理员"
+}
+```
+
+##### 3.2 更新角色
+
+**接口**：`PUT /api/system/role`
+
+**请求体**：
+```json
+{
+  "id": 1,
+  "name": "超级管理员",
+  "code": "SUPER_ADMIN",
+  "sort": 0,
+  "dataScope": "ALL",
+  "status": 0,
+  "remark": "超级系统管理员"
+}
+```
+
+##### 3.3 删除角色
+
+**接口**：`DELETE /api/system/role/{roleId}`
+
+##### 3.4 启用/禁用角色
+
+**接口**：`PUT /api/system/role/status`
+
+**请求参数**：
+- roleId：角色ID
+- status：状态（0-正常，1-禁用）
+
+##### 3.5 分配菜单权限给角色
+
+**接口**：`PUT /api/system/role/assign-menus`
+
+**请求参数**：
+- roleId：角色ID
+
+**请求体**：
+```json
+[1, 2, 3, 4, 5]
+```
+
+##### 3.6 获取角色的菜单权限列表
+
+**接口**：`GET /api/system/role/menus/{roleId}`
+
+**响应**：
+```json
+[1, 2, 3, 4, 5]
+```
+
+##### 3.7 获取角色的用户列表
+
+**接口**：`GET /api/system/role/users/{roleId}`
+
+**响应**：
+```json
+[1, 2, 3]
+```
+
+##### 3.8 查询角色列表
+
+**接口**：`GET /api/system/role`
+
+**请求参数**：
+- roleName：角色名称（可选）
+- status：状态（可选）
+
+**响应**：
+```json
+[
+  {
+    "id": 1,
+    "name": "管理员",
+    "code": "ADMIN",
+    "sort": 1,
+    "dataScope": "ALL",
+    "status": 0,
+    "remark": "系统管理员"
+  },
+  {
+    "id": 2,
+    "name": "普通用户",
+    "code": "USER",
+    "sort": 2,
+    "dataScope": "DEPT",
+    "status": 0,
+    "remark": "普通用户"
+  }
+]
+```
+
+##### 3.9 根据ID获取角色信息
+
+**接口**：`GET /api/system/role/{roleId}`
+
+**响应**：
+```json
+{
+  "id": 1,
+  "name": "管理员",
+  "code": "ADMIN",
+  "sort": 1,
+  "dataScope": "ALL",
+  "status": 0,
+  "remark": "系统管理员"
+}
+```
+
+#### 4. 菜单管理接口
+
+##### 4.1 创建菜单
+
+**接口**：`POST /api/system/menu`
+
+**请求体**：
+```json
+{
+  "name": "用户管理",
+  "permission": "sys:user:manage",
+  "type": 2,
+  "sort": 1,
+  "parentId": 1,
+  "path": "/system/user",
+  "component": "system/user/index.vue",
+  "icon": "User",
+  "visible": 1,
+  "keepAlive": 0,
+  "status": 0
+}
+```
+
+##### 4.2 更新菜单
+
+**接口**：`PUT /api/system/menu`
+
+**请求体**：
+```json
+{
+  "id": 2,
+  "name": "用户管理（更新）",
+  "permission": "sys:user:manage",
+  "type": 2,
+  "sort": 1,
+  "parentId": 1,
+  "path": "/system/user",
+  "component": "system/user/index.vue",
+  "icon": "User",
+  "visible": 1,
+  "keepAlive": 0,
+  "status": 0
+}
+```
+
+##### 4.3 删除菜单
+
+**接口**：`DELETE /api/system/menu/{menuId}`
+
+##### 4.4 获取菜单树形结构
+
+**接口**：`GET /api/system/menu/tree`
+
+**响应**：
+```json
+[
+  {
+    "id": 1,
+    "name": "系统管理",
+    "permission": "sys:manage",
+    "type": 1,
+    "sort": 1,
+    "parentId": 0,
+    "path": "/system",
+    "component": "system/index.vue",
+    "icon": "Setting",
+    "visible": 1,
+    "keepAlive": 0,
+    "status": 0
+  },
+  {
+    "id": 2,
+    "name": "用户管理",
+    "permission": "sys:user:manage",
+    "type": 2,
+    "sort": 1,
+    "parentId": 1,
+    "path": "/system/user",
+    "component": "system/user/index.vue",
+    "icon": "User",
+    "visible": 1,
+    "keepAlive": 0,
+    "status": 0
+  }
+]
+```
+
+##### 4.5 根据用户角色获取菜单权限
+
+**接口**：`POST /api/system/menu/user-menus`
+
+**请求体**：
+```json
+[1, 2]
+```
+
+**响应**：
+```json
+[
+  {
+    "id": 1,
+    "name": "系统管理",
+    "permission": "sys:manage",
+    "type": 1,
+    "sort": 1,
+    "parentId": 0,
+    "path": "/system",
+    "component": "system/index.vue",
+    "icon": "Setting",
+    "visible": 1,
+    "keepAlive": 0,
+    "status": 0
+  }
+]
+```
+
+##### 4.6 批量导入菜单
+
+**接口**：`POST /api/system/menu/import`
+
+**请求体**：
+```json
+[
+  {
+    "name": "角色管理",
+    "permission": "sys:role:manage",
+    "type": 2,
+    "sort": 2,
+    "parentId": 1,
+    "path": "/system/role",
+    "component": "system/role/index.vue",
+    "icon": "Role",
+    "visible": 1,
+    "keepAlive": 0,
+    "status": 0
+  },
+  {
+    "name": "菜单管理",
+    "permission": "sys:menu:manage",
+    "type": 2,
+    "sort": 3,
+    "parentId": 1,
+    "path": "/system/menu",
+    "component": "system/menu/index.vue",
+    "icon": "Menu",
+    "visible": 1,
+    "keepAlive": 0,
+    "status": 0
+  }
+]
+```
+
+##### 4.7 导出菜单
+
+**接口**：`GET /api/system/menu/export`
+
+**响应**：
+```json
+[
+  {
+    "id": 1,
+    "name": "系统管理",
+    "permission": "sys:manage",
+    "type": 1,
+    "sort": 1,
+    "parentId": 0,
+    "path": "/system",
+    "component": "system/index.vue",
+    "icon": "Setting",
+    "visible": 1,
+    "keepAlive": 0,
+    "status": 0
+  },
+  {
+    "id": 2,
+    "name": "用户管理",
+    "permission": "sys:user:manage",
+    "type": 2,
+    "sort": 1,
+    "parentId": 1,
+    "path": "/system/user",
+    "component": "system/user/index.vue",
+    "icon": "User",
+    "visible": 1,
+    "keepAlive": 0,
+    "status": 0
+  }
+]
+```
+
+##### 4.8 根据ID获取菜单信息
+
+**接口**：`GET /api/system/menu/{menuId}`
+
+**响应**：
+```json
+{
+  "id": 1,
+  "name": "系统管理",
+  "permission": "sys:manage",
+  "type": 1,
+  "sort": 1,
+  "parentId": 0,
+  "path": "/system",
+  "component": "system/index.vue",
+  "icon": "Setting",
+  "visible": 1,
+  "keepAlive": 0,
+  "status": 0
+}
+```
+
 ## 天气API切换说明
 
 ### 从和风天气切换到高德天气
@@ -523,6 +1071,15 @@ taskkill /PID <进程ID> /F
 3. 更新 `sysPrompt` 以包含新工具的使用说明
 4. 重启服务后ReAct Agent即可使用新工具
 
+### 系统管理模块开发
+
+1. **数据模型**：在 `system/entity` 包下创建实体类
+2. **数据访问**：在 `system/dao` 包下创建DAO接口
+3. **业务逻辑**：在 `system/service` 包下创建服务接口和实现类
+4. **控制器**：在 `system/controller` 包下创建REST控制器
+5. **安全配置**：在 `system/security` 包下配置Spring Security和JWT过滤器
+6. **工具类**：在 `system/utils` 包下创建通用工具类
+
 ## 版本历史
 
 ### v1.0.0
@@ -560,6 +1117,13 @@ taskkill /PID <进程ID> /F
 - 实现PartyPlanningAgent的自主推理和工具调用
 - 优化活动策划流程，支持更复杂的任务分解
 - 更新项目文档，添加ReAct模式说明
+
+### v2.1.0
+- 新增系统管理模块
+- 实现用户认证与登录功能（JWT + Redis）
+- 实现用户管理、角色管理、菜单管理功能
+- 实现基于RBAC的权限控制机制
+- 更新API接口文档
 
 ## 许可证
 
