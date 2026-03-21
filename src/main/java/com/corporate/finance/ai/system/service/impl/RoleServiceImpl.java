@@ -57,7 +57,6 @@ public class RoleServiceImpl extends ServiceImpl<RoleDao, RoleEntity> implements
             RoleMenuEntity roleMenu = new RoleMenuEntity();
             roleMenu.setRoleId(roleId);
             roleMenu.setMenuId(menuId);
-            roleMenu.setTenantId(1L); // 临时设置租户ID
             roleMenuDao.insert(roleMenu);
         }
     }

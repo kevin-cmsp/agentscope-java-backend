@@ -8,18 +8,14 @@ import lombok.Data;
 public class RoleMenuEntity {
 
     /**
-     * 角色ID
+     * 角色 ID
      */
     private Long roleId;
 
     /**
-     * 菜单ID
+     * 菜单 ID
      */
     private Long menuId;
 
-    /**
-     * 租户ID
-     */
-    private Long tenantId;
 
 }

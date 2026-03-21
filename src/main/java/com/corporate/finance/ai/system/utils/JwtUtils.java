@@ -25,8 +25,15 @@ public class JwtUtils {
         Date now = new Date();
         Date expireDate = new Date(now.getTime() + EXPIRE_TIME);
 
+        // 如果 claims 中包含 username，设置为 subject
+        String subject = null;
+        if (claims.containsKey("username")) {
+            subject = (String) claims.get("username");
+        }
+
         return Jwts.builder()
                 .setClaims(claims)
+                .setSubject(subject)  // 设置 subject 为用户名
                 .setIssuedAt(now)
                 .setExpiration(expireDate)
                 .signWith(secretKey)
@@ -49,7 +56,12 @@ public class JwtUtils {
      */
     public String getUsernameFromToken(String token) {
         Claims claims = parseToken(token);
-        return claims.getSubject();
+        // 优先获取 subject（用户名），如果没有则从 username 字段获取
+        String username = claims.getSubject();
+        if (username == null || username.isEmpty()) {
+            username = claims.get("username", String.class);
+        }
+        return username;
     }
 
     /**

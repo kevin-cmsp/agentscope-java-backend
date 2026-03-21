@@ -3,8 +3,11 @@ package com.corporate.finance.ai.system.entity;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+
+import java.util.List;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -12,7 +15,7 @@ import lombok.EqualsAndHashCode;
 public class MenuEntity extends BaseEntity {
 
     /**
-     * 主键ID
+     * 主键 ID
      */
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
@@ -28,7 +31,7 @@ public class MenuEntity extends BaseEntity {
     private String permission;
 
     /**
-     * 类型（1-目录, 2-菜单, 3-按钮）
+     * 类型（1-目录，2-菜单，3-按钮）
      */
     private Integer type;
 
@@ -38,7 +41,7 @@ public class MenuEntity extends BaseEntity {
     private Integer sort;
 
     /**
-     * 父菜单ID
+     * 父菜单 ID
      */
     private Long parentId;
 
@@ -58,18 +61,24 @@ public class MenuEntity extends BaseEntity {
     private String icon;
 
     /**
-     * 是否显示（0-隐藏, 1-显示）
+     * 是否显示（0-隐藏，1-显示）
      */
     private Integer visible;
 
     /**
-     * 是否缓存（0-否, 1-是）
+     * 是否缓存（0-否，1-是）
      */
     private Integer keepAlive;
 
     /**
-     * 状态（0-正常, 1-禁用）
+     * 状态（0-正常，1-禁用）
      */
     private Integer status;
+
+    /**
+     * 子菜单
+     */
+    @TableField(exist = false)
+    private List<MenuEntity> children;
 
 }

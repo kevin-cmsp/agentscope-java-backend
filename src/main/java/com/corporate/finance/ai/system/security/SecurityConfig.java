@@ -35,14 +35,22 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/api/auth/login", "/api/auth/logout", "/api/auth/captcha").permitAll()
+                .requestMatchers("/api/system/menu/**").authenticated()
                 .anyRequest().authenticated()
             )
             .httpBasic(basic -> basic.disable())
             .formLogin(form -> form.disable())
             .logout(logout -> logout.disable())
-            .anonymous(anonymous -> anonymous.disable())
+            .anonymous(anonymous -> {
+                anonymous.disable();
+                System.out.println("=== SecurityConfig: 禁用匿名访问 ===");
+            })
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
+        
+        System.out.println("=== SecurityConfig: 安全过滤器链已配置 ===");
+        System.out.println("放行路径：/api/auth/login, /api/auth/logout, /api/auth/captcha");
+        System.out.println("需要认证：/api/system/menu/**");
         
         return http.build();
     }

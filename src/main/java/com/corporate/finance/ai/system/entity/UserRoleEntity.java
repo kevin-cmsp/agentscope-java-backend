@@ -8,18 +8,14 @@ import lombok.Data;
 public class UserRoleEntity {
 
     /**
-     * 用户ID
+     * 用户 ID
      */
     private Long userId;
 
     /**
-     * 角色ID
+     * 角色 ID
      */
     private Long roleId;
 
-    /**
-     * 租户ID
-     */
-    private Long tenantId;
 
 }

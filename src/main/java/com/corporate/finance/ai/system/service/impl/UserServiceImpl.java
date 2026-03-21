@@ -74,7 +74,6 @@ public class UserServiceImpl extends ServiceImpl<UserDao, UserEntity> implements
             UserRoleEntity userRole = new UserRoleEntity();
             userRole.setUserId(userId);
             userRole.setRoleId(roleId);
-            userRole.setTenantId(1L); // 临时设置租户ID
             userRoleDao.insert(userRole);
         }
     }

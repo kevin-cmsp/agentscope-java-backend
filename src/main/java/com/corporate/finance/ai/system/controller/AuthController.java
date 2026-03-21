@@ -1,5 +1,6 @@
 package com.corporate.finance.ai.system.controller;
 
+import com.corporate.finance.ai.system.common.Result;
 import com.corporate.finance.ai.system.entity.UserEntity;
 import com.corporate.finance.ai.system.entity.UserVO;
 import com.corporate.finance.ai.system.service.AuthService;
@@ -21,47 +22,68 @@ public class AuthController {
      * 登录
      */
     @PostMapping("/login")
-    public Map<String, Object> login(@RequestBody Map<String, String> params) {
-        String username = params.get("username");
-        String password = params.get("password");
-        String captcha = params.get("captcha");
-        String captchaKey = params.get("captchaKey"); // 新增：验证码 key
-        return authService.login(username, password, captcha, captchaKey);
+    public Result<Map<String, Object>> login(@RequestBody Map<String, String> params) {
+        try {
+            String username = params.get("username");
+            String password = params.get("password");
+            String captcha = params.get("captcha");
+            String captchaKey = params.get("captchaKey");
+            Map<String, Object> result = authService.login(username, password, captcha, captchaKey);
+            return Result.success("登录成功", result);
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        } catch (Exception e) {
+            return Result.serverError("登录失败，请稍后重试");
+        }
     }
 
     /**
      * 登出
      */
     @PostMapping("/logout")
-    public void logout(@RequestHeader("Authorization") String token) {
-        // 移除Bearer前缀
-        if (token.startsWith("Bearer ")) {
-            token = token.substring(7);
+    public Result<Void> logout(@RequestHeader("Authorization") String token) {
+        try {
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+            authService.logout(token);
+            return Result.success("退出成功", null);
+        } catch (Exception e) {
+            return Result.error("退出失败：" + e.getMessage());
         }
-        authService.logout(token);
     }
 
     /**
      * 获取验证码
      */
     @GetMapping("/captcha")
-    public Map<String, Object> getCaptcha() {
-        return authService.generateCaptcha();
+    public Result<Map<String, Object>> getCaptcha() {
+        try {
+            Map<String, Object> result = authService.generateCaptcha();
+            return Result.success(result);
+        } catch (Exception e) {
+            return Result.serverError("获取验证码失败");
+        }
     }
 
     /**
      * 获取用户信息
      */
     @GetMapping("/userinfo")
-    public UserVO getUserInfo(@RequestHeader("Authorization") String token) {
-        // 移除 Bearer 前缀
-        if (token.startsWith("Bearer ")) {
-            token = token.substring(7);
+    public Result<UserVO> getUserInfo(@RequestHeader("Authorization") String token) {
+        try {
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+            String username = "admin";
+            UserEntity user = authService.getUserInfo(username);
+            if (user == null) {
+                return Result.error("用户不存在");
+            }
+            return Result.success(convertToUserVO(user));
+        } catch (Exception e) {
+            return Result.serverError("获取用户信息失败");
         }
-        // TODO: 从 token 中获取用户名
-        String username = "admin"; // 临时测试
-        UserEntity user = authService.getUserInfo(username);
-        return convertToUserVO(user);
     }
 
     /**

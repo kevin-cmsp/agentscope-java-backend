@@ -32,6 +32,11 @@ public interface MenuService extends IService<MenuEntity> {
     List<MenuEntity> getUserMenus(List<Long> roleIds);
 
     /**
+     * 根据用户 ID 获取菜单权限
+     */
+    List<MenuEntity> getUserMenusByUserId(Long userId);
+
+    /**
      * 批量导入菜单
      */
     void importMenus(List<MenuEntity> menus);
