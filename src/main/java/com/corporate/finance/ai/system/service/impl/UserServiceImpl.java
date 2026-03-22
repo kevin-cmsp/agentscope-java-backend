@@ -32,13 +32,22 @@ public class UserServiceImpl extends ServiceImpl<UserDao, UserEntity> implements
     public void createUser(UserEntity user) {
         // 加密密码
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        // 保存用户
+        // 设置默认状态（如果未设置）
+        if (user.getStatus() == null) {
+            user.setStatus(0);
+        }
+        // 设置默认删除标记（如果未设置）
+        if (user.getDeleted() == null) {
+            user.setDeleted(false);
+        }
+        // 保存用户（createTime, updateTime, creator, updater 会自动填充）
         save(user);
     }
 
     @Override
     public void updateUser(UserEntity user) {
-        // 更新用户信息（不更新密码）
+        // 更新用户信息时，不更新密码字段（密码重置使用专门的方法）
+        user.setPassword(null);
         updateById(user);
     }
 

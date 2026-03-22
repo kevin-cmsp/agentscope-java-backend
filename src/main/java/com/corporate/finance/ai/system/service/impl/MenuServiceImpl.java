@@ -39,14 +39,16 @@ public class MenuServiceImpl extends ServiceImpl<MenuDao, MenuEntity> implements
 
     @Override
     public void deleteMenu(Long menuId) {
-        // 递归删除子菜单
+        // 递归逻辑删除子菜单
         deleteMenuRecursive(menuId);
     }
 
     @Override
     public List<MenuEntity> getMenuTree() {
-        // 获取所有菜单
-        List<MenuEntity> allMenus = list(new QueryWrapper<MenuEntity>().orderByAsc("sort"));
+        // 获取所有菜单（排除已删除）
+        List<MenuEntity> allMenus = list(new QueryWrapper<MenuEntity>()
+                .eq("deleted", 0)
+                .orderByAsc("sort"));
         // 构建菜单树
         return buildMenuTree(allMenus, 0L);
     }
@@ -141,13 +143,15 @@ public class MenuServiceImpl extends ServiceImpl<MenuDao, MenuEntity> implements
     }
 
     /**
-     * 递归删除菜单
+     * 递归逻辑删除菜单
      */
     private void deleteMenuRecursive(Long menuId) {
-        // 删除当前菜单
+        // 使用 removeById 触发 MyBatis-Plus 的逻辑删除
         removeById(menuId);
-        // 查找子菜单
-        List<MenuEntity> childMenus = list(new QueryWrapper<MenuEntity>().eq("parent_id", menuId));
+        
+        // 查找子菜单并递归删除
+        List<MenuEntity> childMenus = list(new QueryWrapper<MenuEntity>()
+                .eq("parent_id", menuId));
         for (MenuEntity childMenu : childMenus) {
             deleteMenuRecursive(childMenu.getId());
         }

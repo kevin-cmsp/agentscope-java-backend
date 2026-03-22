@@ -17,7 +17,7 @@ public class MenuEntity extends BaseEntity {
     /**
      * 主键 ID
      */
-    @TableId(type = IdType.ASSIGN_ID)
+    @TableId(type = IdType.AUTO)
     private Long id;
 
     /**
@@ -80,5 +80,10 @@ public class MenuEntity extends BaseEntity {
      */
     @TableField(exist = false)
     private List<MenuEntity> children;
+
+    /**
+     * 逻辑删除标记
+     */
+    private Boolean deleted;
 
 }

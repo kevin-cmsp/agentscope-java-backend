@@ -14,6 +14,10 @@ spring:
       port: 16379
       password: 123456
       database: 0
+  # Jackson 序列化配置 - 将 Long 转为 String 避免精度丢失
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
 
 server:
   port: 8080
@@ -25,28 +29,32 @@ server:
   tomcat:
     uri-encoding: UTF-8
 
-# MyBatis-Plus配置
+# MyBatis-Plus 配置
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml
   type-aliases-package: com.corporate.finance.ai.system.entity
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    default-enum-type-handler: org.apache.ibatis.type.EnumOrdinalTypeHandler
   global-config:
     db-config:
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
+      logic-delete-type: default
 
 # 大模型服务配置
 model:
   defaultService: dashscope
   services:
     dashscope:
-      api-key: sk-45718b81ssssssssssssss750d523d
+      api-key: sk-45718b815xxxxxxxxx2f750d523d
       base-url: https://dashscope.aliyuncs.com/api/v1
       model: qwen-turbo
 
 # 天气查询API配置（高德天气）
 weather:
-  api-key: ede7b9c6ece1edsssssssss19b48875
+  api-key: ede7b9c6ecexxxxxxxx1419b48875
   base-url: https://restapi.amap.com/v3/weather/weatherInfo
 
 # 系统配置

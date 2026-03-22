@@ -52,4 +52,9 @@ public class RoleEntity extends BaseEntity {
      */
     private String remark;
 
+    /**
+     * 逻辑删除标记
+     */
+    private Boolean deleted;
+
 }

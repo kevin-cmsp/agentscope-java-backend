@@ -12,7 +12,7 @@ import lombok.EqualsAndHashCode;
 public class UserEntity extends BaseEntity {
 
     /**
-     * 主键ID
+     * 主键 ID
      */
     @TableId(type = IdType.ASSIGN_ID)
     private Long id;
@@ -43,12 +43,12 @@ public class UserEntity extends BaseEntity {
     private String email;
 
     /**
-     * 所属部门ID
+     * 所属部门 ID
      */
     private Long deptId;
 
     /**
-     * 岗位ID列表（JSON数组字符串）
+     * 岗位 ID 列表（JSON 数组字符串）
      */
     private String postIds;
 

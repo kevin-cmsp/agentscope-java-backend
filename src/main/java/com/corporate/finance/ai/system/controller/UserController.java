@@ -34,6 +34,7 @@ public class UserController {
     @PutMapping
     public Result<Void> updateUser(@RequestBody UserEntity user) {
         try {
+            // 前端传来的密码字段应该被忽略，使用专门的密码重置接口
             userService.updateUser(user);
             return Result.success("更新成功", null);
         } catch (Exception e) {

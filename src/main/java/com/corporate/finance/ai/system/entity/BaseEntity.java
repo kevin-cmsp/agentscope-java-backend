@@ -36,7 +36,7 @@ public class BaseEntity {
     /**
      * 逻辑删除标记
      */
-    @TableLogic
-    private Integer deleted;
+    @TableLogic(value = "0", delval = "1")
+    private Boolean deleted;
 
 }

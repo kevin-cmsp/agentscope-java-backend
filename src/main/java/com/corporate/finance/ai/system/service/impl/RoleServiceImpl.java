@@ -36,6 +36,7 @@ public class RoleServiceImpl extends ServiceImpl<RoleDao, RoleEntity> implements
 
     @Override
     public void deleteRole(Long roleId) {
+        // 使用 removeById 触发 MyBatis-Plus 的逻辑删除
         removeById(roleId);
     }
 
@@ -82,6 +83,8 @@ public class RoleServiceImpl extends ServiceImpl<RoleDao, RoleEntity> implements
         if (status != null) {
             queryWrapper.eq("status", status);
         }
+        // 只查询未删除的角色
+        queryWrapper.eq("deleted", 0);
         return list(queryWrapper);
     }
 
