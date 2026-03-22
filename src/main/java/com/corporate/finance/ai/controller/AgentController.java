@@ -6,6 +6,9 @@ import com.corporate.finance.ai.service.AgentManagerService;
 import com.corporate.finance.ai.service.MemoryService;
 import com.corporate.finance.ai.service.SkillService;
 import com.corporate.finance.ai.service.WeatherService;
+import com.corporate.finance.ai.system.entity.ConversationEntity;
+import com.corporate.finance.ai.system.common.Result;
+import com.corporate.finance.ai.system.service.ChatHistoryService;
 import com.corporate.finance.ai.tool.ActivityTool;
 import com.corporate.finance.ai.tool.BudgetTool;
 import com.corporate.finance.ai.tool.CalculatorTool;
@@ -122,6 +125,9 @@ public class AgentController {
     @Autowired
     private PartyPlanningAgentLevel partyPlanningAgentLevel;
 
+    @Autowired
+    private ChatHistoryService chatHistoryService;
+
     /**
      * 构造函数
      * 
@@ -182,16 +188,36 @@ public class AgentController {
      * @return 统一格式的响应
      */
     @PostMapping(value = "/chat", produces = "application/json;charset=utf-8")
-    public Map<String, Object> chat(@RequestBody Map<String, String> request) {
+    public Result<Map<String, Object>> chat(@RequestBody Map<String, Object> request) {
         // 获取用户消息
-        String message = request.get("message");
+        String message = (String) request.get("message");
+        // 获取会话ID（可选）
+        Long conversationId = null;
+        Object convIdObj = request.get("conversationId");
+        if (convIdObj != null) {
+            if (convIdObj instanceof Number) {
+                conversationId = ((Number) convIdObj).longValue();
+            } else if (convIdObj instanceof String && !((String) convIdObj).isEmpty()) {
+                conversationId = Long.parseLong((String) convIdObj);
+            }
+        }
         
         // 参数校验
         if (message == null || message.isEmpty()) {
-            return createResponse("error", "错误：消息内容不能为空");
+            return Result.error("消息内容不能为空");
         }
 
         try {
+            // 如果没有会话ID，自动创建新会话
+            if (conversationId == null) {
+                String title = message.length() > 20 ? message.substring(0, 20) : message;
+                ConversationEntity conversation = chatHistoryService.createConversation(title);
+                conversationId = conversation.getId();
+            }
+
+            // 保存用户消息到数据库
+            chatHistoryService.saveMessage(conversationId, "user", message);
+
             // 存储用户消息到记忆
             memoryService.storeMessage("user", message);
             
@@ -220,14 +246,21 @@ public class AgentController {
                     break;
             }
             
+            // 保存助手回复到数据库
+            chatHistoryService.saveMessage(conversationId, "assistant", response);
+
             // 存储响应到记忆
             memoryService.storeMessage("assistant", response);
             
-            return createResponse("success", response);
+            Map<String, Object> data = new HashMap<>();
+            data.put("status", "success");
+            data.put("content", response);
+            data.put("conversationId", conversationId);
+            return Result.success(data);
         } catch (Exception e) {
             String errorMessage = "处理请求失败：" + e.getMessage();
             memoryService.storeMessage("assistant", errorMessage);
-            return createResponse("error", errorMessage);
+            return Result.error(errorMessage);
         }
     }
 

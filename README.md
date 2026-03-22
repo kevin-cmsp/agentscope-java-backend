@@ -51,7 +51,8 @@ agentscope-java-backend/
 │   │   ├── RedisConfig.java                #   Redis 配置
 │   │   └── WebConfig.java                  #   Web 配置
 │   ├── controller/                         # REST 控制器
-│   │   └── AgentController.java            #   Agent 管理与聊天接口
+│   │   ├── AgentController.java            #   Agent 管理与聊天接口
+│   │   └── ChatHistoryController.java      #   对话历史管理接口
 │   ├── service/                            # 业务服务
 │   │   ├── AgentManagerService.java        #   Agent 管理服务
 │   │   ├── SkillService.java               #   技能管理服务
@@ -69,9 +70,12 @@ agentscope-java-backend/
 │       │   ├── MenuEntity.java             #     菜单实体
 │       │   ├── UserRoleEntity.java         #     用户角色关联
 │       │   ├── RoleMenuEntity.java         #     角色菜单关联
+│       │   ├── ConversationEntity.java    #     AI对话会话实体
+│       │   ├── MessageEntity.java         #     AI对话消息实体
 │       │   └── UserVO.java                 #     用户 DTO
 │       ├── dao/                            #   数据访问层
 │       ├── service/                        #   系统业务服务
+│       │   ├── ChatHistoryService.java     #     对话历史服务
 │       │   └── impl/                       #     服务实现
 │       ├── controller/                     #   系统控制器
 │       │   ├── AuthController.java         #     认证接口
@@ -117,6 +121,8 @@ mysql -h <host> -u root -p agentscope < doc/database-mysql5.7.sql
 | `system_menu` | 菜单表 |
 | `system_users_roles` | 用户角色关联表 |
 | `system_roles_menus` | 角色菜单关联表 |
+| `ai_conversation` | AI对话会话表 |
+| `ai_message` | AI对话消息表 |
 
 初始化数据包含超级管理员用户 `admin`（密码：`123456`）。
 
@@ -253,15 +259,20 @@ java -jar target/agentscope-java-backend-1.0-SNAPSHOT.jar
 **请求体**：
 ```json
 {
-  "message": "用户消息"
+  "message": "用户消息",
+  "conversationId": 1
 }
 ```
+
+- `message`：必填，用户消息内容
+- `conversationId`：可选，会话ID。不传时自动创建新会话。
 
 **响应**：
 ```json
 {
   "status": "success",
-  "content": "响应内容"
+  "content": "响应内容",
+  "conversationId": 1
 }
 ```
 
@@ -278,7 +289,38 @@ java -jar target/agentscope-java-backend-1.0-SNAPSHOT.jar
 
 意图识别优先使用 DashScope 大模型语义识别，失败时回退到关键词匹配。
 
-#### 1.2 天气查询
+#### 1.2 对话历史管理
+
+| 操作 | 方法 | 路径 | 说明 |
+|------|------|------|------|
+| 会话列表 | GET | `/api/chat/conversations` | 获取当前用户的会话列表 |
+| 创建会话 | POST | `/api/chat/conversations` | 创建新的空会话 |
+| 会话消息 | GET | `/api/chat/conversations/{id}/messages` | 获取指定会话的消息列表 |
+| 删除会话 | DELETE | `/api/chat/conversations/{id}` | 删除指定会话及其消息 |
+
+**创建会话请求**：
+```json
+{ "title": "会话标题" }
+```
+
+**会话列表响应**：
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": [
+    {
+      "id": 1,
+      "userId": 1,
+      "title": "Java过滤器配置",
+      "createTime": "2026-03-22T10:30:00",
+      "updateTime": "2026-03-22T10:35:00"
+    }
+  ]
+}
+```
+
+#### 1.3 天气查询
 
 **POST** `/api/weather`
 
@@ -568,6 +610,27 @@ java -jar target/agentscope-java-backend-1.0-SNAPSHOT.jar
 
 - `system_users_roles`：用户角色关联（user_id, role_id），联合主键
 - `system_roles_menus`：角色菜单关联（role_id, menu_id），联合主键
+
+### AI对话会话表 (ai_conversation)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | bigint | 主键（自增） |
+| user_id | bigint | 用户ID |
+| title | varchar(100) | 会话标题（用户首次提问前20字符） |
+| creator / create_time | - | 创建人 / 创建时间 |
+| updater / update_time | - | 更新人 / 更新时间 |
+| deleted | bit | 逻辑删除（0-未删除，1-已删除） |
+
+### AI对话消息表 (ai_message)
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | bigint | 主键（自增） |
+| conversation_id | bigint | 会话ID |
+| role | varchar(20) | 角色（user-用户，assistant-助手） |
+| content | text | 消息内容 |
+| create_time | datetime | 创建时间 |
 
 ## 配置说明
 

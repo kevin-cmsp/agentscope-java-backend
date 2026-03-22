@@ -149,4 +149,33 @@ INSERT INTO `system_roles_menus` (`role_id`, `menu_id`)
 SELECT 1, id FROM `system_menu` WHERE `deleted` = b'0';
 
 
+-- ----------------------------
+-- Table structure for ai_conversation (AI对话会话表)
+-- ----------------------------
+CREATE TABLE `ai_conversation` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_id` bigint(20) NOT NULL COMMENT '用户ID',
+  `title` varchar(100) DEFAULT NULL COMMENT '会话标题（用户首次提问前20字符）',
+  `creator` varchar(64) DEFAULT NULL COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) DEFAULT NULL COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '逻辑删除（0-未删除，1-已删除）',
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI对话会话表';
+
+-- ----------------------------
+-- Table structure for ai_message (AI对话消息表)
+-- ----------------------------
+CREATE TABLE `ai_message` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `conversation_id` bigint(20) NOT NULL COMMENT '会话ID',
+  `role` varchar(20) NOT NULL COMMENT '角色（user-用户，assistant-助手）',
+  `content` text NOT NULL COMMENT '消息内容',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  KEY `idx_conversation_id` (`conversation_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI对话消息表';
 
