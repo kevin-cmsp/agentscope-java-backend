@@ -2,146 +2,258 @@
 
 ## 项目概述
 
-这是一个基于 **AgentScope-Java** 构建的AI Agent开发平台后端项目。该项目使用Spring Boot 3.x、JDK 21和Maven构建，提供了完整的Agent管理、技能管理、天气查询和多智能体协作功能。
+基于 **AgentScope-Java** 构建的 AI Agent 开发平台后端服务。项目采用 Spring Boot 3.x + JDK 21 构建，集成通义千问大模型，提供智能聊天、多智能体协作、天气查询、技能管理等 AI 能力，同时包含完整的 RBAC 权限管理系统。
 
-### 主要功能
+### 核心功能
 
-- **天气查询**：支持中文城市名称，使用高德天气API
-- **技能管理**：注册、列出、执行和卸载技能
-- **记忆管理**：存储和管理Agent对话历史
-- **Agent管理**：创建、查询、执行和删除Agent（基础功能）
-- **多智能体协作**：基于ReAct模式的活动策划，支持自主推理和工具调用
+- **智能聊天**：基于 DashScope（通义千问）的意图识别与多场景对话
+- **多智能体协作**：支持 ReAct 模式和层级式协作两种 Agent 编排方式
+- **天气查询**：集成高德天气 API，支持中文城市名称查询
+- **技能管理**：支持动态注册、执行和卸载 Agent 技能
+- **系统管理**：完整的用户、角色、菜单 RBAC 权限管理体系
+- **安全认证**：JWT + Redis 的无状态认证，支持验证码、账户锁定等安全策略
 
 ## 技术栈
 
 | 技术 | 版本 | 用途 |
 |------|------|------|
-| Spring Boot | 3.2.0 | 后端框架 |
-| JDK | 21 | Java开发环境 |
-| Maven | 3.9+ | 依赖管理和构建工具 |
-| OkHttp | 4.12.0 | HTTP客户端 |
-| Jackson | 2.15.2 | JSON解析 |
-| AgentScope | 1.0.9 | Agent开发框架 |
+| Spring Boot | 3.2.4 | 后端框架 |
+| JDK | 21 | Java 运行环境 |
+| Maven | 3.9+ | 构建工具 |
+| AgentScope Java | 1.0.9 | Agent 开发框架 |
+| DashScope SDK | 2.0.0 | 通义千问大模型 API |
+| MyBatis-Plus | 3.5.5 | ORM 框架 |
+| MySQL | 5.7+ | 关系型数据库 |
+| Redis | - | 缓存与会话存储 |
+| Spring Security | - | 安全认证框架 |
+| OkHttp | 4.12.0 | HTTP 客户端 |
+| Hutool | 5.8.25 | 工具函数库 |
 
 ## 项目结构
 
 ```
 agentscope-java-backend/
-├── src/
-│   ├── main/
-│   │   ├── java/com/corporate/finance/ai/
-│   │   │   ├── agent/            # Agent实现
-│   │   │   │   ├── ActivityAgent.java          # 活动安排Agent
-│   │   │   │   ├── BudgetAgent.java             # 预算管理Agent
-│   │   │   │   ├── PartyPlanningAgent.java      # 活动策划Agent（ReAct模式）
-│   │   │   │   └── PartyPlanningAgentLevel.java # 活动策划Agent（层级式协作模式）
-│   │   │   ├── config/          # 配置类
-│   │   │   ├── controller/       # REST API控制器
-│   │   │   ├── service/          # 业务逻辑服务
-│   │   │   ├── tool/             # 工具类
-│   │   │   │   ├── ActivityTool.java           # 活动安排工具
-│   │   │   │   ├── BudgetTool.java              # 预算计算工具
-│   │   │   │   ├── CalculatorTool.java          # 计算器工具
-│   │   │   │   └── WeatherTool.java             # 天气查询工具
-│   │   │   └── Application.java  # 应用入口
-│   │   └── resources/
-│   │       └── application.yml   # 配置文件
-│   └── test/                     # 测试代码
-├── pom.xml                       # Maven配置文件
-└── README.md                     # 项目文档
+├── src/main/java/com/corporate/finance/ai/
+│   ├── Application.java                    # 应用入口
+│   ├── agent/                              # AI Agent 实现
+│   │   ├── PartyPlanningAgent.java         #   活动策划 Agent（ReAct 模式）
+│   │   ├── PartyPlanningAgentLevel.java    #   活动策划 Agent（层级式协作）
+│   │   ├── BudgetAgent.java                #   预算管理 Agent
+│   │   └── ActivityAgent.java              #   活动安排 Agent
+│   ├── tool/                               # Agent 工具
+│   │   ├── CalculatorTool.java             #   计算器工具
+│   │   ├── WeatherTool.java                #   天气查询工具
+│   │   ├── BudgetTool.java                 #   预算计算工具
+│   │   └── ActivityTool.java               #   活动安排工具
+│   ├── config/                             # 配置类
+│   │   ├── AgentScopeConfig.java           #   AgentScope 配置
+│   │   ├── ModelServiceConfig.java         #   模型服务配置
+│   │   ├── RedisConfig.java                #   Redis 配置
+│   │   └── WebConfig.java                  #   Web 配置
+│   ├── controller/                         # REST 控制器
+│   │   └── AgentController.java            #   Agent 管理与聊天接口
+│   ├── service/                            # 业务服务
+│   │   ├── AgentManagerService.java        #   Agent 管理服务
+│   │   ├── SkillService.java               #   技能管理服务
+│   │   ├── MemoryService.java              #   记忆管理服务
+│   │   ├── WeatherService.java             #   天气查询服务
+│   │   ├── ModelService.java               #   模型服务接口
+│   │   ├── ModelServiceFactory.java        #   模型服务工厂
+│   │   └── DashScopeModelService.java      #   DashScope 实现
+│   └── system/                             # 系统管理模块
+│       ├── common/Result.java              #   统一响应封装
+│       ├── entity/                         #   数据实体
+│       │   ├── BaseEntity.java             #     基础实体（审计字段）
+│       │   ├── UserEntity.java             #     用户实体
+│       │   ├── RoleEntity.java             #     角色实体
+│       │   ├── MenuEntity.java             #     菜单实体
+│       │   ├── UserRoleEntity.java         #     用户角色关联
+│       │   ├── RoleMenuEntity.java         #     角色菜单关联
+│       │   └── UserVO.java                 #     用户 DTO
+│       ├── dao/                            #   数据访问层
+│       ├── service/                        #   系统业务服务
+│       │   └── impl/                       #     服务实现
+│       ├── controller/                     #   系统控制器
+│       │   ├── AuthController.java         #     认证接口
+│       │   ├── UserController.java         #     用户管理接口
+│       │   ├── RoleController.java         #     角色管理接口
+│       │   └── MenuController.java         #     菜单管理接口
+│       ├── security/                       #   安全认证
+│       │   ├── SecurityConfig.java         #     Security 配置
+│       │   ├── JwtFilter.java              #     JWT 过滤器
+│       │   └── PermissionService.java      #     权限检查服务
+│       └── utils/                          #   工具类
+│           ├── JwtUtils.java               #     JWT 工具
+│           ├── RedisUtils.java             #     Redis 工具
+│           └── AesDecryptor.java           #     AES 解密工具
+├── src/main/resources/
+│   └── application.yml                     # 应用配置
+├── doc/
+│   └── database-mysql5.7.sql               # 数据库初始化脚本
+└── pom.xml                                 # Maven 配置
 ```
 
 ## 快速开始
 
 ### 1. 环境准备
 
-- **JDK 21**：确保安装并配置了JDK 21
-- **Maven 3.9+**：确保安装了Maven 3.9或更高版本
-- **高德天气API Key**：注册高德开放平台账号并获取API Key
-- **DashScope API Key**：注册阿里云账号并获取DashScope API Key（用于大模型服务）
+- JDK 21
+- Maven 3.9+
+- MySQL 5.7+
+- Redis
 
-### 2. 配置API Key
+### 2. 初始化数据库
 
-编辑 `src/main/resources/application.yml` 文件，配置相关API Key：
+```bash
+mysql -h <host> -u root -p agentscope < doc/database-mysql5.7.sql
+```
+
+数据库包含以下表：
+
+| 表名 | 说明 |
+|------|------|
+| `system_user` | 用户表 |
+| `system_role` | 角色表 |
+| `system_menu` | 菜单表 |
+| `system_users_roles` | 用户角色关联表 |
+| `system_roles_menus` | 角色菜单关联表 |
+
+初始化数据包含超级管理员用户 `admin`（密码：`123456`）。
+
+### 3. 修改配置
+
+编辑 `src/main/resources/application.yml`：
 
 ```yaml
-# 天气查询API配置（高德天气）
-weather:
-  api-key: your_amap_api_key_here  # 替换为你的高德天气API Key
-  base-url: https://restapi.amap.com/v3/weather/weatherInfo
+# 数据库连接
+spring:
+  datasource:
+    url: jdbc:mysql://<host>:<port>/agentscope?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: <your_password>
 
-# 大模型服务配置
+# Redis 连接
+  data:
+    redis:
+      host: <redis_host>
+      port: <redis_port>
+      password: <redis_password>
+
+# DashScope 大模型
 model:
   services:
     dashscope:
-      api-key: your_dashscope_api_key_here  # 替换为你的DashScope API Key
-      base-url: https://dashscope.aliyuncs.com/api/v1
+      api-key: <your_dashscope_api_key>
       model: qwen-turbo
+
+# 高德天气
+weather:
+  api-key: <your_amap_api_key>
 ```
 
-### 3. 构建项目
+### 4. 构建与运行
 
 ```bash
-# 编译项目
+# 编译
 mvn clean compile
 
-# 运行项目
-mvn spring-boot:run
-```
-
-服务将在 `http://localhost:8080` 启动。
-
-### 4. 服务管理（PowerShell）
-
-#### 4.1 启动服务
-
-```powershell
-# 在项目目录下启动服务
-cd agentscope-java-backend
+# 运行
 mvn spring-boot:run
 
-# 编译并启动服务
-cd agentscope-java-backend
-mvn clean compile spring-boot:run
-
-# 后台启动服务（Windows）
-# 注意：Windows PowerShell不直接支持后台运行，建议使用新的终端窗口
-Start-Process powershell -ArgumentList "cd agentscope-java-backend; mvn spring-boot:run"
+# 打包
+mvn clean package
+java -jar target/agentscope-java-backend-1.0-SNAPSHOT.jar
 ```
 
-#### 4.2 停止服务
+服务启动后访问 `http://localhost:8080`。
 
-```powershell
-# 查看端口8080占用情况
-netstat -ano | findstr :8080
+## 系统架构
 
-# 终止占用端口的进程（替换 <进程ID> 为实际的进程ID）
-taskkill /PID <进程ID> /F
+### 整体架构
 
-# 或者在启动服务的终端窗口中按 Ctrl+C 停止服务
+```
+客户端 (Web/Mobile)
+       │ HTTP/REST
+       ▼
+┌──────────────────────────────────────────┐
+│            API 层 (Controllers)          │
+│  AgentController / AuthController / ...  │
+└──────────────────┬───────────────────────┘
+                   │
+┌──────────────────▼───────────────────────┐
+│           业务逻辑层 (Services)           │
+│  AgentManager / Skill / Memory / Weather │
+│  Auth / User / Role / Menu / Permission  │
+└─────┬─────────────────┬─────────────────┘
+      │                 │
+      ▼                 ▼
+┌───────────┐   ┌──────────────┐
+│ AgentScope│   │ 数据访问层    │
+│ Agents &  │   │ (MyBatis-    │
+│ Tools     │   │  Plus DAO)   │
+└─────┬─────┘   └──────┬───────┘
+      │                │
+      ▼                ▼
+┌───────────┐   ┌──────────────┐
+│ DashScope │   │    MySQL     │
+│ 高德API   │   │    Redis     │
+└───────────┘   └──────────────┘
 ```
 
-#### 4.3 查看服务状态
+### 多智能体协作
 
-```powershell
-# 检查服务是否运行
-netstat -ano | findstr :8080
+**ReAct 模式**（PartyPlanningAgent）：Agent 自主进行"思考-行动-观察"循环，自动调用工具完成任务。
 
-# 测试服务是否正常响应
-$body = @{ message = "你好" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body -ContentType "application/json"
+```
+用户输入 → Thought → Action(调用工具) → Observation → Thought → ... → Final Answer
 ```
 
-## API接口文档
+**层级式协作模式**（PartyPlanningAgentLevel）：Manager Agent 解析需求后，协调 BudgetAgent 和 ActivityAgent 分别完成子任务，最终整合结果。
 
-### 1. 统一聊天接口（推荐）
+### 安全认证
 
-**接口**：`POST /api/chat`
+- JWT Token 认证，有效期 24 小时
+- AES 加密传输密码，BCrypt 哈希存储
+- Redis 存储 Token 和验证码
+- 登录失败 5 次后锁定账户 30 分钟
+- 验证码 15 分钟有效，一次性使用
+
+### RBAC 权限模型
+
+```
+用户(User) ──N:M── 角色(Role) ──N:M── 菜单(Menu)
+```
+
+菜单类型：目录（type=1）、菜单（type=2）、按钮（type=3）
+
+数据权限支持：ALL / DEPT_CUSTOM / DEPT_ONLY / DEPT_AND_CHILD / SELF
+
+## API 接口文档
+
+### 统一响应格式
+
+```json
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {}
+}
+```
+
+---
+
+### 1. 智能聊天接口
+
+#### 1.1 统一聊天
+
+**POST** `/api/chat`
+
+通过意图识别自动分发到对应处理逻辑。
 
 **请求体**：
 ```json
 {
-  "message": "济南的天气怎么样？"  // 用户消息
+  "message": "用户消息"
 }
 ```
 
@@ -149,366 +261,138 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body
 ```json
 {
   "status": "success",
-  "content": "城市: 山东省 济南市\n发布时间: 2026-03-18 08:03:01\n\n=== 今天天气 ===\n日期: 2026-03-18 (周三)\n白天: 阴, 温度 10°C, 东北风 4级\n夜间: 多云, 温度 1°C, 东北风 4级\n\n=== 明天预报 ===\n日期: 2026-03-19 (周四)\n白天: 多云, 温度 15°C\n夜间: 多云, 温度 6°C\n\n=== 后天预报 ===\n日期: 2026-03-20 (周五)\n白天: 晴, 温度 19°C\n夜间: 晴, 温度 10°C\n\n=== 大后天预报 ===\n日期: 2026-03-21 (周六)\n白天: 晴, 温度 21°C\n夜间: 晴, 温度 12°C"
+  "content": "响应内容"
 }
 ```
-
-**PowerShell调用示例**：
-
-```powershell
-# 示例1：查询指定城市天气
-$body = @{ message = "北京的天气怎么样？" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body -ContentType "application/json"
-
-# 示例2：查询默认城市天气（无需指定城市）
-$body = @{ message = "今天天气怎么样？" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body -ContentType "application/json"
-
-# 示例3：计算请求
-$body = @{ message = "10加5等于多少？" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body -ContentType "application/json"
-
-# 示例4：智能查数
-$body = @{ message = "上个月的销量是多少？" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body -ContentType "application/json"
-
-# 示例5：知识库查询
-$body = @{ message = "公司的规章制度是什么？" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body -ContentType "application/json"
-
-# 示例6：通用问题
-$body = @{ message = "你好，今天过得怎么样？" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body -ContentType "application/json"
-
-# 示例7：活动策划
-$body = @{ message = "帮我策划一场生日派对，地点在北京，预算5000元，大约10人参加" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body -ContentType "application/json"
-```
-
-#### 1.1 意图识别系统
-
-系统使用**DashScope API**（通义千问）进行智能意图识别，支持更复杂的语义理解。当大模型调用失败时，会自动回退到基于关键词的识别方案。
 
 **支持的意图类型**：
-- **weather**：天气查询（如："北京的天气怎么样？"、"今天会下雨吗？"）
-- **calculator**：计算请求（如："10加5等于多少？"、"3乘以4是多少？"）
-- **data**：智能查数（如："上个月的销量是多少？"、"今年的收入情况？"）
-- **knowledge**：知识库查询（如："公司的规章制度是什么？"、"如何使用系统？"）
-- **party**：活动策划（如："帮我策划一场生日派对"、"我想举办一个聚会"）
-- **general**：其他通用问题（如："你好，今天过得怎么样？"）
 
-### 2. 天气查询接口
+| 意图 | 触发示例 | 说明 |
+|------|---------|------|
+| `weather` | "北京的天气怎么样？" | 天气查询 |
+| `calculator` | "10加5等于多少？" | 数学计算 |
+| `data` | "上个月的销量是多少？" | 企业数据查询 |
+| `knowledge` | "公司的规章制度是什么？" | 知识库查询 |
+| `party` | "帮我策划一场生日派对" | 活动策划 |
+| `general` | "你好" | 通用对话 |
 
-**接口**：`POST /api/weather`
+意图识别优先使用 DashScope 大模型语义识别，失败时回退到关键词匹配。
 
-**请求体**：
+#### 1.2 天气查询
+
+**POST** `/api/weather`
+
 ```json
-{
-  "city": "济南"  // 城市名称（支持中文）
-}
-```
+// 请求
+{ "city": "北京" }
 
-**响应**：
-```
-城市: 山东省 济南市
-发布时间: 2026-03-18 08:03:01
+// 响应（文本格式）
+城市: 北京市
+发布时间: 2026-03-22 08:00:00
 
 === 今天天气 ===
-日期: 2026-03-18 (周三)
-白天: 阴, 温度 10°C, 东北风 4级
-夜间: 多云, 温度 1°C, 东北风 4级
-
-=== 明天预报 ===
-日期: 2026-03-19 (周四)
-白天: 多云, 温度 15°C
-夜间: 多云, 温度 6°C
-
-=== 后天预报 ===
-日期: 2026-03-20 (周五)
-白天: 晴, 温度 19°C
-夜间: 晴, 温度 10°C
-
-=== 大后天预报 ===
-日期: 2026-03-21 (周六)
-白天: 晴, 温度 21°C
-夜间: 晴, 温度 12°C
+日期: 2026-03-22 (周日)
+白天: 晴, 温度 20°C, 南风 2级
+夜间: 多云, 温度 10°C, 北风 3级
+...
 ```
 
-**PowerShell调用示例**：
-```powershell
-# 调用天气查询接口
-$body = @{ city = "济南" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/weather" -Method POST -Body $body -ContentType "application/json"
-```
+缓存策略：30 分钟内不重复查询同一城市。调用失败最多重试 3 次。
 
-### 3. 技能管理接口
+#### 1.3 活动策划（层级式协作）
 
-#### 3.1 注册技能
+**POST** `/api/api/party/level`
 
-**接口**：`POST /api/skills/register`
-
-**请求体**：
 ```json
+// 请求
+{ "message": "帮我策划一场生日派对，地点在北京，预算5000元，10人参加" }
+
+// 响应
 {
-  "skillName": "calculator"  // 技能名称
+  "status": "success",
+  "content": "完整的活动策划方案..."
 }
 ```
 
-**响应**：
-```
-技能注册成功：calculator
-```
+#### 1.4 技能管理
 
-#### 3.2 列出所有技能
+| 操作 | 方法 | 路径 |
+|------|------|------|
+| 注册技能 | POST | `/api/skills/register` |
+| 技能列表 | GET | `/api/skills` |
+| 卸载技能 | DELETE | `/api/skills/{skillName}` |
+| 执行计算 | POST | `/api/skills/calculator` |
 
-**接口**：`GET /api/skills`
-
-**响应**：
+**计算器请求**：
 ```json
 {
-  "skills": ["calculator"],
-  "count": 1
+  "operation": "add",   // add / subtract / multiply / divide / percentage
+  "a": 10,
+  "b": 5
 }
 ```
 
-#### 3.3 执行计算器技能
+#### 1.5 记忆管理
 
-**接口**：`POST /api/skills/calculator`
+| 操作 | 方法 | 路径 |
+|------|------|------|
+| 获取对话历史 | GET | `/api/memory` |
+| 清空记忆 | POST | `/api/memory/clear` |
 
-**请求体**：
+#### 1.6 Agent 管理
+
+| 操作 | 方法 | 路径 | 说明 |
+|------|------|------|------|
+| 创建 Agent | POST | `/api/agents` | 已禁用 |
+| 获取 Agent | GET | `/api/agents/{agentId}` | |
+| 执行 Agent | POST | `/api/agents/{agentId}/execute` | |
+| Agent 列表 | GET | `/api/agents` | |
+| 删除 Agent | DELETE | `/api/agents/{agentId}` | |
+
+---
+
+### 2. 认证接口
+
+#### 2.1 登录
+
+**POST** `/api/auth/login`
+
 ```json
+// 请求
 {
-  "operation": "add",  // 操作类型：add, subtract, multiply, divide, percentage
-  "a": 10,             // 第一个数
-  "b": 5               // 第二个数
+  "username": "admin",
+  "password": "AES加密后的密码",
+  "captcha": "ABCD",
+  "captchaKey": "captcha:xxx"
 }
-```
 
-**响应**：
-```
-10.00 + 5.00 = 15.00
-```
-
-### 4. 记忆管理接口
-
-#### 4.1 获取记忆内容
-
-**接口**：`GET /api/memory`
-
-**响应**：
-```
-User: 查询城市天气：济南
-Assistant: 天气信息：城市: 济南
-温度: 11°C (体感: 10°C)
-湿度: 46%
-天气: 多云
-风向: 东北风
-风力: 3级
-```
-
-#### 4.2 清除记忆
-
-**接口**：`POST /api/memory/clear`
-
-**响应**：
-```
-记忆已清除
-```
-
-### 5. Agent管理接口
-
-> **注意**：Agent创建功能已暂时移除，需要根据具体业务需求重新实现。
-
-#### 5.1 创建Agent
-
-**接口**：`POST /api/agents`
-
-**请求体**：
-```json
+// 响应
 {
-  "name": "test-agent",  // Agent名称
-  "sysPrompt": "你是一个测试助手"  // 系统提示词
-}
-```
-
-**响应**：
-```
-Agent创建功能已暂时移除，需要根据具体业务需求重新实现
-```
-
-#### 5.2 列出所有Agent
-
-**接口**：`GET /api/agents`
-
-**响应**：
-```json
-[]
-```
-
-### 6. 多智能体协作接口
-
-#### 6.1 活动策划接口（ReAct模式）
-
-系统实现了基于ReAct模式的多智能体协作活动策划功能，通过PartyPlanningAgent协调多个工具完成复杂的活动策划任务。
-
-**工作流程**：
-1. 用户发送活动策划请求（包含地点、预算、人数等信息）
-2. PartyPlanningAgent（ReAct模式）自主推理：
-   - 分析用户需求，识别需要调用的工具
-   - 调用WeatherTool查询指定地点的天气信息
-   - 调用BudgetTool计算预算分配
-   - 调用ActivityTool根据人数和天气安排活动
-   - 整合所有信息，生成完整的活动策划方案
-
-**调用示例**：
-```powershell
-# 策划生日派对
-$body = @{ message = "帮我策划一场生日派对，地点在北京，预算5000元，大约10人参加" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/chat" -Method POST -Body $body -ContentType "application/json"
-```
-
-**响应示例**：
-```
-生日派对策划方案
-
-一、基本信息
-- 地点：北京
-- 日期：今天
-- 预算：5000元
-- 预计人数：10人
-
-二、天气情况
-城市: 北京市
-发布时间: 2026-03-18 08:03:01
-今天白天: 晴, 温度 25°C, 南风 2级
-今天夜间: 晴, 温度 15°C, 南风 2级
-
-三、预算分配
-总预算：5000元
-场地租赁：1500元 (30%)
-餐饮费用：2000元 (40%)
-装饰布置：750元 (15%)
-活动物料：500元 (10%)
-其他费用：250元 (5%)
-
-四、活动安排
-天气良好，可安排室内外结合的活动：
-1. 开场活动：签到、合影
-2. 主体活动：桌游、卡拉OK
-3. 互动游戏：真心话大冒险、谁是卧底
-4. 活动仪式：剪彩、开香槟、切蛋糕
-5. 结束活动：交换礼物、合影留念
-
-五、建议
-1. 由于天气晴朗，建议安排部分户外活动
-2. 场地选择建议在交通便利的市中心
-3. 餐饮建议选择适合10人份的套餐
-4. 装饰以生日主题为主，营造温馨氛围
-5. 活动安排时间建议在下午2点开始，晚上8点结束
-```
-
-#### 6.2 活动级别策划接口
-
-**接口**：`POST /api/api/party/level`
-
-**请求体**：
-```json
-{
-  "message": "帮我策划一场高端商务活动，地点在上海，预算10000元，大约20人参加"  // 用户消息
-}
-```
-
-**响应**：
-根据活动级别生成相应的策划方案
-
-## 多智能体协作系统（ReAct模式）
-
-### 核心组件
-
-1. **PartyPlanningAgent**：基于ReAct模式的核心协调者，负责自主推理和工具调用
-2. **WeatherTool**：提供天气查询功能
-3. **BudgetTool**：提供预算计算功能
-4. **ActivityTool**：提供活动安排功能
-
-### ReAct工作流程
-
-```
-用户输入 → ReAct Agent → 思考(Thought) → 行动(Action) → 观察(Observation) → 思考(Thought) → ... → 最终答案(Final Answer)
-```
-
-**示例流程**：
-1. 用户输入："帮我策划一个10人的活动，预算5000元，地点在北京"
-2. ReAct Agent思考：需要先查询北京的天气
-3. 行动：调用WeatherTool查询北京天气
-4. 观察：获取天气信息（北京：晴天，温度25℃）
-5. ReAct Agent思考：现在需要计算预算分配
-6. 行动：调用BudgetTool计算预算
-7. 观察：获取预算明细（场地1500元，餐饮2000元等）
-8. ReAct Agent思考：需要根据人数和天气安排活动
-9. 行动：调用ActivityTool安排活动
-10. 观察：获取活动方案
-11. ReAct Agent思考：已收集所有必要信息，生成最终方案
-12. 最终答案：输出完整的活动策划方案
-
-## 系统管理模块
-
-### 功能概述
-
-系统管理模块提供了完整的用户认证、权限管理、用户管理、角色管理和菜单管理功能，基于RBAC（Role-Based Access Control）模型设计。
-
-### 技术特点
-
-- **JWT认证**：使用JWT进行无状态认证
-- **Redis缓存**：使用Redis存储会话和权限信息
-- **RBAC模型**：支持用户-角色-权限三层映射
-- **动态权限**：前端菜单与按钮权限由后端根据用户角色实时生成
-- **审计日志**：关键操作记录操作人、时间、IP、变更内容
-
-### API接口文档
-
-#### 1. 认证接口
-
-##### 1.1 登录
-
-**接口**：`POST /api/auth/login`
-
-**请求体**：
-```json
-{ 
-   "username": "admin", 
-   "password": "123456", 
-   "captcha": "ABCD", 
-   "captchaKey": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-**响应**：
-```json
-{
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": 1,
-    "username": "admin",
-    "nickname": "管理员",
-    "status": 0
+  "code": 200,
+  "data": {
+    "token": "eyJhbGciOiJIUzI1NiIs...",
+    "user": {
+      "id": 1,
+      "username": "admin",
+      "nickname": "管理员",
+      "status": 0
+    }
   }
 }
 ```
 
-##### 1.2 登出
+认证流程：获取验证码 -> 前端 AES 加密密码 -> 发送登录请求 -> 服务端验证 -> 返回 JWT Token。
 
-**接口**：`POST /api/auth/logout`
+后续请求需在 Header 中携带：`Authorization: Bearer <token>`
 
-**请求头**：
-```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
+#### 2.2 登出
 
-##### 1.3 获取验证码
+**POST** `/api/auth/logout`
 
-**接口**：`GET /api/auth/captcha`
+#### 2.3 获取验证码
 
-**响应**：
+**GET** `/api/auth/captcha`
+
 ```json
 {
   "captchaKey": "captcha:123456",
@@ -516,16 +400,10 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 }
 ```
 
-##### 1.4 获取用户信息
+#### 2.4 获取当前用户信息
 
-**接口**：`GET /api/auth/userinfo`
+**GET** `/api/auth/userinfo`
 
-**请求头**：
-```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-**响应**：
 ```json
 {
   "id": 1,
@@ -538,135 +416,56 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 }
 ```
 
-#### 2. 用户管理接口
+---
 
-##### 2.1 创建用户
+### 3. 用户管理接口
 
-**接口**：`POST /api/system/user`
+所有接口前缀：`/api/system/user`
 
-**请求体**：
+| 操作 | 方法 | 路径 | 说明 |
+|------|------|------|------|
+| 用户列表 | GET | `/` | 支持 username/mobile/status 查询 |
+| 用户详情 | GET | `/{userId}` | |
+| 创建用户 | POST | `/` | |
+| 更新用户 | PUT | `/` | |
+| 删除用户 | DELETE | `/{userId}` | |
+| 更新状态 | PUT | `/status` | 参数：userId, status(0正常/1禁用) |
+| 重置密码 | PUT | `/reset-password/{userId}` | 重置为默认密码 123456 |
+| 分配角色 | PUT | `/assign-roles` | 参数：userId, body: [roleId...] |
+| 用户角色 | GET | `/roles/{userId}` | 返回角色 ID 列表 |
+
+**创建用户请求**：
 ```json
 {
-  "username": "test",
+  "username": "user01",
   "password": "123456",
-  "nickname": "测试用户",
+  "nickname": "用户01",
   "mobile": "13900139000",
-  "email": "test@example.com",
+  "email": "user@example.com",
   "deptId": 1,
   "status": 0
 }
 ```
 
-##### 2.2 更新用户
+---
 
-**接口**：`PUT /api/system/user`
+### 4. 角色管理接口
 
-**请求体**：
-```json
-{
-  "id": 2,
-  "nickname": "测试用户更新",
-  "mobile": "13900139001",
-  "email": "test-update@example.com",
-  "deptId": 1,
-  "status": 0
-}
-```
+所有接口前缀：`/api/system/role`
 
-##### 2.3 删除用户
+| 操作 | 方法 | 路径 | 说明 |
+|------|------|------|------|
+| 角色列表 | GET | `/` | 支持 roleName/status 查询 |
+| 角色详情 | GET | `/{roleId}` | |
+| 创建角色 | POST | `/` | |
+| 更新角色 | PUT | `/` | |
+| 删除角色 | DELETE | `/{roleId}` | |
+| 更新状态 | PUT | `/status` | 参数：roleId, status |
+| 分配菜单 | PUT | `/assign-menus` | 参数：roleId, body: [menuId...] |
+| 角色菜单 | GET | `/menus/{roleId}` | 返回菜单 ID 列表 |
+| 角色用户 | GET | `/users/{roleId}` | 返回用户 ID 列表 |
 
-**接口**：`DELETE /api/system/user/{userId}`
-
-##### 2.4 启用/禁用用户
-
-**接口**：`PUT /api/system/user/status`
-
-**请求参数**：
-- userId：用户ID
-- status：状态（0-正常，1-禁用）
-
-##### 2.5 重置用户密码
-
-**接口**：`PUT /api/system/user/reset-password/{userId}`
-
-##### 2.6 分配角色给用户
-
-**接口**：`PUT /api/system/user/assign-roles`
-
-**请求参数**：
-- userId：用户ID
-
-**请求体**：
-```json
-[1, 2, 3]
-```
-
-##### 2.7 获取用户的角色列表
-
-**接口**：`GET /api/system/user/roles/{userId}`
-
-**响应**：
-```json
-[1, 2, 3]
-```
-
-##### 2.8 查询用户列表
-
-**接口**：`GET /api/system/user`
-
-**请求参数**：
-- username：用户名（可选）
-- mobile：手机号（可选）
-- status：状态（可选）
-
-**响应**：
-```json
-[
-  {
-    "id": 1,
-    "username": "admin",
-    "nickname": "管理员",
-    "mobile": "13800138000",
-    "email": "admin@example.com",
-    "deptId": 1,
-    "status": 0
-  },
-  {
-    "id": 2,
-    "username": "test",
-    "nickname": "测试用户",
-    "mobile": "13900139000",
-    "email": "test@example.com",
-    "deptId": 1,
-    "status": 0
-  }
-]
-```
-
-##### 2.9 根据ID获取用户信息
-
-**接口**：`GET /api/system/user/{userId}`
-
-**响应**：
-```json
-{
-  "id": 1,
-  "username": "admin",
-  "nickname": "管理员",
-  "mobile": "13800138000",
-  "email": "admin@example.com",
-  "deptId": 1,
-  "status": 0
-}
-```
-
-#### 3. 角色管理接口
-
-##### 3.1 创建角色
-
-**接口**：`POST /api/system/role`
-
-**请求体**：
+**创建角色请求**：
 ```json
 {
   "name": "管理员",
@@ -678,121 +477,24 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 }
 ```
 
-##### 3.2 更新角色
+---
 
-**接口**：`PUT /api/system/role`
+### 5. 菜单管理接口
 
-**请求体**：
-```json
-{
-  "id": 1,
-  "name": "超级管理员",
-  "code": "SUPER_ADMIN",
-  "sort": 0,
-  "dataScope": "ALL",
-  "status": 0,
-  "remark": "超级系统管理员"
-}
-```
+所有接口前缀：`/api/system/menu`
 
-##### 3.3 删除角色
+| 操作 | 方法 | 路径 | 说明 |
+|------|------|------|------|
+| 菜单树 | GET | `/tree` | 返回树形菜单结构 |
+| 菜单详情 | GET | `/{menuId}` | |
+| 创建菜单 | POST | `/` | |
+| 更新菜单 | PUT | `/` | |
+| 删除菜单 | DELETE | `/{menuId}` | |
+| 用户菜单 | POST | `/user-menus` | body: [roleId...] |
+| 批量导入 | POST | `/import` | body: [MenuEntity...] |
+| 导出菜单 | GET | `/export` | |
 
-**接口**：`DELETE /api/system/role/{roleId}`
-
-##### 3.4 启用/禁用角色
-
-**接口**：`PUT /api/system/role/status`
-
-**请求参数**：
-- roleId：角色ID
-- status：状态（0-正常，1-禁用）
-
-##### 3.5 分配菜单权限给角色
-
-**接口**：`PUT /api/system/role/assign-menus`
-
-**请求参数**：
-- roleId：角色ID
-
-**请求体**：
-```json
-[1, 2, 3, 4, 5]
-```
-
-##### 3.6 获取角色的菜单权限列表
-
-**接口**：`GET /api/system/role/menus/{roleId}`
-
-**响应**：
-```json
-[1, 2, 3, 4, 5]
-```
-
-##### 3.7 获取角色的用户列表
-
-**接口**：`GET /api/system/role/users/{roleId}`
-
-**响应**：
-```json
-[1, 2, 3]
-```
-
-##### 3.8 查询角色列表
-
-**接口**：`GET /api/system/role`
-
-**请求参数**：
-- roleName：角色名称（可选）
-- status：状态（可选）
-
-**响应**：
-```json
-[
-  {
-    "id": 1,
-    "name": "管理员",
-    "code": "ADMIN",
-    "sort": 1,
-    "dataScope": "ALL",
-    "status": 0,
-    "remark": "系统管理员"
-  },
-  {
-    "id": 2,
-    "name": "普通用户",
-    "code": "USER",
-    "sort": 2,
-    "dataScope": "DEPT",
-    "status": 0,
-    "remark": "普通用户"
-  }
-]
-```
-
-##### 3.9 根据ID获取角色信息
-
-**接口**：`GET /api/system/role/{roleId}`
-
-**响应**：
-```json
-{
-  "id": 1,
-  "name": "管理员",
-  "code": "ADMIN",
-  "sort": 1,
-  "dataScope": "ALL",
-  "status": 0,
-  "remark": "系统管理员"
-}
-```
-
-#### 4. 菜单管理接口
-
-##### 4.1 创建菜单
-
-**接口**：`POST /api/system/menu`
-
-**请求体**：
+**创建菜单请求**：
 ```json
 {
   "name": "用户管理",
@@ -801,7 +503,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
   "sort": 1,
   "parentId": 1,
   "path": "/system/user",
-  "component": "system/user/index.vue",
+  "component": "system/User",
   "icon": "User",
   "visible": 1,
   "keepAlive": 0,
@@ -809,328 +511,154 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 }
 ```
 
-##### 4.2 更新菜单
+菜单类型说明：
+- `type=1`：目录，用于分组
+- `type=2`：菜单，关联前端页面组件
+- `type=3`：按钮，用于按钮级权限控制
 
-**接口**：`PUT /api/system/menu`
+## 数据模型
 
-**请求体**：
-```json
-{
-  "id": 2,
-  "name": "用户管理（更新）",
-  "permission": "sys:user:manage",
-  "type": 2,
-  "sort": 1,
-  "parentId": 1,
-  "path": "/system/user",
-  "component": "system/user/index.vue",
-  "icon": "User",
-  "visible": 1,
-  "keepAlive": 0,
-  "status": 0
-}
-```
+### 用户表 (system_user)
 
-##### 4.3 删除菜单
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | bigint | 主键（雪花算法） |
+| username | varchar(30) | 用户名（唯一） |
+| password | varchar(100) | BCrypt 加密密码 |
+| nickname | varchar(30) | 昵称 |
+| mobile | varchar(20) | 手机号（唯一） |
+| email | varchar(50) | 邮箱 |
+| dept_id | bigint | 所属部门 ID |
+| post_ids | varchar(200) | 岗位 ID 列表（JSON） |
+| status | tinyint | 状态（0-正常，1-禁用） |
+| remark | varchar(500) | 备注 |
+| creator / create_time | - | 创建人 / 创建时间 |
+| updater / update_time | - | 更新人 / 更新时间 |
+| deleted | bit | 逻辑删除（0-未删除，1-已删除） |
 
-**接口**：`DELETE /api/system/menu/{menuId}`
+### 角色表 (system_role)
 
-##### 4.4 获取菜单树形结构
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | bigint | 主键 |
+| name | varchar(30) | 角色名称 |
+| code | varchar(30) | 角色编码（唯一，如 ADMIN） |
+| sort | int | 排序 |
+| data_scope | varchar(20) | 数据权限（ALL/DEPT_CUSTOM/DEPT_ONLY/DEPT_AND_CHILD/SELF） |
+| data_scope_dept_ids | varchar(500) | 自定义部门 ID 列表 |
+| status | tinyint | 状态 |
 
-**接口**：`GET /api/system/menu/tree`
+### 菜单表 (system_menu)
 
-**响应**：
-```json
-[
-  {
-    "id": 1,
-    "name": "系统管理",
-    "permission": "sys:manage",
-    "type": 1,
-    "sort": 1,
-    "parentId": 0,
-    "path": "/system",
-    "component": "system/index.vue",
-    "icon": "Setting",
-    "visible": 1,
-    "keepAlive": 0,
-    "status": 0
-  },
-  {
-    "id": 2,
-    "name": "用户管理",
-    "permission": "sys:user:manage",
-    "type": 2,
-    "sort": 1,
-    "parentId": 1,
-    "path": "/system/user",
-    "component": "system/user/index.vue",
-    "icon": "User",
-    "visible": 1,
-    "keepAlive": 0,
-    "status": 0
-  }
-]
-```
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | bigint | 主键 |
+| name | varchar(50) | 菜单名称 |
+| permission | varchar(100) | 权限标识 |
+| type | tinyint | 类型（1-目录，2-菜单，3-按钮） |
+| sort | int | 排序 |
+| parent_id | bigint | 父菜单 ID |
+| path | varchar(200) | 路由地址 |
+| component | varchar(200) | 前端组件路径 |
+| icon | varchar(50) | 图标 |
+| visible | tinyint | 是否显示（0-隐藏，1-显示） |
+| keep_alive | tinyint | 是否缓存 |
 
-##### 4.5 根据用户角色获取菜单权限
+### 关联表
 
-**接口**：`POST /api/system/menu/user-menus`
+- `system_users_roles`：用户角色关联（user_id, role_id），联合主键
+- `system_roles_menus`：角色菜单关联（role_id, menu_id），联合主键
 
-**请求体**：
-```json
-[1, 2]
-```
+## 配置说明
 
-**响应**：
-```json
-[
-  {
-    "id": 1,
-    "name": "系统管理",
-    "permission": "sys:manage",
-    "type": 1,
-    "sort": 1,
-    "parentId": 0,
-    "path": "/system",
-    "component": "system/index.vue",
-    "icon": "Setting",
-    "visible": 1,
-    "keepAlive": 0,
-    "status": 0
-  }
-]
-```
+### application.yml 关键配置
 
-##### 4.6 批量导入菜单
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `server.port` | 服务端口 | 8080 |
+| `spring.datasource.*` | 数据库连接 | - |
+| `spring.data.redis.*` | Redis 连接 | - |
+| `model.defaultService` | 默认模型服务 | dashscope |
+| `model.services.dashscope.api-key` | DashScope API Key | - |
+| `model.services.dashscope.model` | 模型名称 | qwen-turbo |
+| `weather.api-key` | 高德天气 API Key | - |
+| `system.login.max-fail-count` | 最大登录失败次数 | 5 |
+| `system.login.lock-time` | 账户锁定时间（分钟） | 30 |
+| `system.password.reset-default` | 默认重置密码 | 123456 |
+| `system.aes.key` | AES 加密密钥（32位） | - |
+| `system.aes.iv` | AES 初始化向量（16位） | - |
 
-**接口**：`POST /api/system/menu/import`
+### MyBatis-Plus 配置
 
-**请求体**：
-```json
-[
-  {
-    "name": "角色管理",
-    "permission": "sys:role:manage",
-    "type": 2,
-    "sort": 2,
-    "parentId": 1,
-    "path": "/system/role",
-    "component": "system/role/index.vue",
-    "icon": "Role",
-    "visible": 1,
-    "keepAlive": 0,
-    "status": 0
-  },
-  {
-    "name": "菜单管理",
-    "permission": "sys:menu:manage",
-    "type": 2,
-    "sort": 3,
-    "parentId": 1,
-    "path": "/system/menu",
-    "component": "system/menu/index.vue",
-    "icon": "Menu",
-    "visible": 1,
-    "keepAlive": 0,
-    "status": 0
-  }
-]
-```
-
-##### 4.7 导出菜单
-
-**接口**：`GET /api/system/menu/export`
-
-**响应**：
-```json
-[
-  {
-    "id": 1,
-    "name": "系统管理",
-    "permission": "sys:manage",
-    "type": 1,
-    "sort": 1,
-    "parentId": 0,
-    "path": "/system",
-    "component": "system/index.vue",
-    "icon": "Setting",
-    "visible": 1,
-    "keepAlive": 0,
-    "status": 0
-  },
-  {
-    "id": 2,
-    "name": "用户管理",
-    "permission": "sys:user:manage",
-    "type": 2,
-    "sort": 1,
-    "parentId": 1,
-    "path": "/system/user",
-    "component": "system/user/index.vue",
-    "icon": "User",
-    "visible": 1,
-    "keepAlive": 0,
-    "status": 0
-  }
-]
-```
-
-##### 4.8 根据ID获取菜单信息
-
-**接口**：`GET /api/system/menu/{menuId}`
-
-**响应**：
-```json
-{
-  "id": 1,
-  "name": "系统管理",
-  "permission": "sys:manage",
-  "type": 1,
-  "sort": 1,
-  "parentId": 0,
-  "path": "/system",
-  "component": "system/index.vue",
-  "icon": "Setting",
-  "visible": 1,
-  "keepAlive": 0,
-  "status": 0
-}
-```
-
-## 天气API切换说明
-
-### 从和风天气切换到高德天气
-
-**原因**：
-- 和风天气对中文城市名称支持存在问题
-- 高德天气API对中文城市名称支持更好，无需额外的城市编码映射
-- 高德天气API响应速度更快（国内服务器）
-- 高德天气提供更丰富的天气数据
-
-**使用方法**：
-1. 注册高德开放平台账号：https://lbs.amap.com/
-2. 创建应用并获取Web服务API Key
-3. 在 `application.yml` 中配置API Key
-4. 重启服务
-
-## 常见问题
-
-### 1. 天气查询返回"查询天气失败，错误信息：INVALID_USER_KEY"
-
-**原因**：高德天气API Key不正确或未激活
-**解决方法**：检查API Key是否正确，确保已经在高德开放平台激活并启用了Web服务API
-
-### 2. 天气查询返回"查询天气失败，错误信息：DAILY_QUERY_OVER_LIMIT"
-
-**原因**：API Key使用次数超限
-**解决方法**：高德天气免费版每天有调用限制，检查使用频率或升级套餐
-
-### 3. 服务启动失败，端口8080被占用
-
-**解决方法**：
-```powershell
-# 查找占用端口的进程
-netstat -ano | findstr :8080
-
-# 终止占用端口的进程
-taskkill /PID <进程ID> /F
-```
-
-### 4. 大模型调用失败
-
-**原因**：DashScope API Key不正确或网络问题
-**解决方法**：检查API Key是否正确，确保网络连接正常
-
-### 5. 活动策划返回空响应
-
-**原因**：ReAct Agent执行过程中出现错误
-**解决方法**：检查DashScope API Key配置，确保网络连接正常，或尝试简化请求内容
+- 逻辑删除字段：`deleted`（0-未删除，1-已删除）
+- 自动填充：creator、createTime、updater、updateTime
+- SQL 日志：StdOutImpl
 
 ## 开发指南
 
-### 添加新技能
+### 添加新的 Agent 工具
 
-1. 在 `tool` 包下创建新的工具类
-2. 使用 `@Component` 注解标记为Spring组件
-3. 使用 `@Tool` 注解标记工具方法
-4. 在 `AgentController` 的 `getToolByName` 方法中添加技能映射
-5. 重启服务后即可注册和使用新技能
+1. 在 `tool` 包下创建工具类，使用 `@Component` 标记
+2. 使用 `@Tool` 注解标记工具方法，`@ToolParam` 标记参数
+3. 在 `AgentController.getToolByName()` 中添加映射
 
-### 扩展多智能体协作功能
+```java
+@Component
+public class MyTool {
+    @Tool(name = "my_tool", description = "工具描述")
+    public String execute(
+        @ToolParam(name = "param1", description = "参数说明") String param1) {
+        return "结果";
+    }
+}
+```
 
-1. 在 `agent` 包下创建新的Agent类
-2. 实现相应的业务逻辑
-3. 在 `PartyPlanningAgent` 中添加新Agent的协作逻辑
-4. 重启服务后即可使用新的协作功能
+### 扩展多智能体协作
 
-### 扩展ReAct Agent能力
+1. 在 `agent` 包下创建新的 Agent 类
+2. 在 `PartyPlanningAgent.init()` 中注册新工具到 Toolkit
+3. 更新 `sysPrompt` 说明新工具的使用方式
 
-1. 在 `tool` 包下创建新的工具类
-2. 在 `PartyPlanningAgent` 的 `init` 方法中注册新工具
-3. 更新 `sysPrompt` 以包含新工具的使用说明
-4. 重启服务后ReAct Agent即可使用新工具
+### 添加系统管理功能
 
-### 系统管理模块开发
+按照以下分层创建：
+1. `system/entity/` - 数据实体
+2. `system/dao/` - DAO 接口（继承 BaseMapper）
+3. `system/service/` - 服务接口与实现
+4. `system/controller/` - REST 控制器
 
-1. **数据模型**：在 `system/entity` 包下创建实体类
-2. **数据访问**：在 `system/dao` 包下创建DAO接口
-3. **业务逻辑**：在 `system/service` 包下创建服务接口和实现类
-4. **控制器**：在 `system/controller` 包下创建REST控制器
-5. **安全配置**：在 `system/security` 包下配置Spring Security和JWT过滤器
-6. **工具类**：在 `system/utils` 包下创建通用工具类
+## 常见问题
+
+**天气查询返回 INVALID_USER_KEY**
+检查高德天气 API Key 是否正确配置和激活。
+
+**天气查询返回 DAILY_QUERY_OVER_LIMIT**
+高德免费版有每日调用限制，请降低调用频率或升级套餐。
+
+**端口 8080 被占用**
+```powershell
+netstat -ano | findstr :8080
+taskkill /PID <进程ID> /F
+```
+
+**大模型调用失败**
+检查 DashScope API Key 是否正确，确保网络能访问 `dashscope.aliyuncs.com`。
+
+**登录时提示账号被锁定**
+Redis 中设置了 30 分钟锁定，等待过期或手动清除 Redis 中 `login:lock:<username>` 键。
 
 ## 版本历史
 
-### v1.0.0
-- 初始化项目，集成AgentScope-Java
-- 实现天气查询功能（使用OpenWeatherMap API）
-- 实现技能管理和记忆管理功能
-
-### v1.1.0
-- 切换到和风天气API，支持中文城市名称
-- 移除不再需要的WeatherAgent和WeatherTool
-- 优化代码结构，提高可维护性
-- 更新项目文档
-
-### v1.2.0
-- 新增统一聊天接口（`POST /api/chat`）
-- 实现基于DashScope API的智能意图识别
-- 添加默认城市天气查询功能
-- 优化响应格式和错误处理
-
-### v1.3.0
-- 切换到高德天气API，解决中文城市名称支持问题
-- 优化WeatherService代码结构
-- 更新项目文档
-
-### v1.4.0
-- 新增多智能体协作功能
-- 实现PartyPlanningAgent、BudgetAgent和ActivityAgent
-- 添加BudgetTool和ActivityTool工具类
-- 扩展意图识别系统，支持派对策划意图
-- 更新API接口文档
-
-### v2.0.0
-- 升级到ReAct模式的多智能体协作
-- 新增WeatherTool工具类
-- 实现PartyPlanningAgent的自主推理和工具调用
-- 优化活动策划流程，支持更复杂的任务分解
-- 更新项目文档，添加ReAct模式说明
-
-### v2.1.0
-- 新增系统管理模块
-- 实现用户认证与登录功能（JWT + Redis）
-- 实现用户管理、角色管理、菜单管理功能
-- 实现基于RBAC的权限控制机制
-- 更新API接口文档
+| 版本 | 说明 |
+|------|------|
+| v2.1.0 | 新增系统管理模块：用户认证（JWT+Redis）、用户/角色/菜单管理、RBAC 权限控制 |
+| v2.0.0 | 升级到 ReAct 模式多智能体协作，Agent 自主推理与工具调用 |
+| v1.4.0 | 新增多智能体协作、BudgetAgent/ActivityAgent、活动策划意图识别 |
+| v1.3.0 | 切换到高德天气 API |
+| v1.2.0 | 新增统一聊天接口、DashScope 意图识别 |
+| v1.1.0 | 切换到和风天气 API |
+| v1.0.0 | 项目初始化，集成 AgentScope-Java |
 
 ## 许可证
 
-本项目使用 MIT 许可证。
-
-## 联系方式
-
-- **项目维护者**：Corporate Finance AI Team
-- **邮箱**：contact@corporatefinance.ai
-- **GitHub**：https://github.com/corporate-finance-ai/agentscope-java-backend
+MIT License
