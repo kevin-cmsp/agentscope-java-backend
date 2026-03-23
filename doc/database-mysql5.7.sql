@@ -179,3 +179,46 @@ CREATE TABLE `ai_message` (
   KEY `idx_conversation_id` (`conversation_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI对话消息表';
 
+-- ----------------------------
+-- Table structure for ai_user_profile (AI用户画像表)
+-- ----------------------------
+CREATE TABLE `ai_user_profile` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_id` bigint(20) NOT NULL COMMENT '用户ID',
+  `interest_tags` varchar(500) DEFAULT '[]' COMMENT '用户兴趣标签（JSON数组，如 ["天气","财务","活动策划"]）',
+  `frequent_features` varchar(500) DEFAULT '[]' COMMENT '常用功能（JSON数组，如 ["weather","calculator","party"]）',
+  `preference_summary` varchar(1000) DEFAULT NULL COMMENT '偏好摘要（自然语言描述用户偏好）',
+  `chat_style` varchar(20) DEFAULT 'casual' COMMENT '对话风格偏好（formal-正式, casual-随意, technical-技术）',
+  `total_chats` int(11) NOT NULL DEFAULT '0' COMMENT '累计对话次数',
+  `total_messages` int(11) NOT NULL DEFAULT '0' COMMENT '累计消息数',
+  `profile_version` int(11) NOT NULL DEFAULT '1' COMMENT '画像版本号（每次更新+1）',
+  `creator` varchar(64) DEFAULT NULL COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) DEFAULT NULL COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '逻辑删除（0-未删除，1-已删除）',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_id` (`user_id`),
+  KEY `idx_update_time` (`update_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI用户画像表';
+
+-- ----------------------------
+-- Table structure for ai_memory_summary (AI记忆摘要表)
+-- 存储记忆压缩后的摘要信息，用于持久化记忆压缩结果
+-- ----------------------------
+CREATE TABLE `ai_memory_summary` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键',
+  `user_id` bigint(20) NOT NULL COMMENT '用户ID',
+  `summary_content` text NOT NULL COMMENT '摘要内容',
+  `original_message_count` int(11) NOT NULL DEFAULT '0' COMMENT '原始消息数量',
+  `compressed_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '压缩时间',
+  `creator` varchar(64) DEFAULT NULL COMMENT '创建者',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `updater` varchar(64) DEFAULT NULL COMMENT '更新者',
+  `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  `deleted` bit(1) NOT NULL DEFAULT b'0' COMMENT '逻辑删除（0-未删除，1-已删除）',
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_compressed_at` (`compressed_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI记忆摘要表';
+

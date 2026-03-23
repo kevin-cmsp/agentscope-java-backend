@@ -3,10 +3,13 @@ package com.corporate.finance.ai.controller;
 import com.corporate.finance.ai.agent.PartyPlanningAgent;
 import com.corporate.finance.ai.agent.PartyPlanningAgentLevel;
 import com.corporate.finance.ai.service.AgentManagerService;
+import com.corporate.finance.ai.service.MemoryCompressService;
 import com.corporate.finance.ai.service.MemoryService;
 import com.corporate.finance.ai.service.SkillService;
+import com.corporate.finance.ai.service.UserProfileService;
 import com.corporate.finance.ai.service.WeatherService;
 import com.corporate.finance.ai.system.entity.ConversationEntity;
+import com.corporate.finance.ai.system.entity.UserProfileEntity;
 import com.corporate.finance.ai.system.common.Result;
 import com.corporate.finance.ai.system.service.ChatHistoryService;
 import com.corporate.finance.ai.tool.ActivityTool;
@@ -128,6 +131,12 @@ public class AgentController {
 
     @Autowired
     private ChatHistoryService chatHistoryService;
+
+    @Autowired
+    private MemoryCompressService memoryCompressService;
+
+    @Autowired
+    private UserProfileService userProfileService;
 
     /**
      * 构造函数
@@ -251,6 +260,13 @@ public class AgentController {
             chatHistoryService.saveMessage(conversationId, "assistant", response);
             // 存储响应到记忆 (使用用户 ID 隔离)
             memoryService.storeMessage(userId, "assistant", response);
+
+            // 检查并执行记忆压缩
+            memoryCompressService.checkAndCompress(userId);
+
+            // 增量更新用户画像统计
+            userProfileService.incrementChatCount(userId);
+
             Map<String, Object> data = new HashMap<>();
             data.put("status", "success");
             data.put("content", response);
@@ -598,6 +614,12 @@ public class AgentController {
             contextBuilder.append("3. 如果是问候语，礼貌回应\n");
             contextBuilder.append("4. 如果问题不明确，引导用户提供更详细的信息\n");
             contextBuilder.append("5. 回答控制在 200 字以内\n\n");
+
+            // 添加用户画像个性化提示
+            String personalizedPrompt = userProfileService.getPersonalizedPrompt(userId);
+            if (!personalizedPrompt.isEmpty()) {
+                contextBuilder.append(personalizedPrompt).append("\n");
+            }
             
             // 添加历史对话上下文
             if (!recentMessages.isEmpty()) {
@@ -1135,5 +1157,68 @@ public class AgentController {
     private String handlePartyRequest(String message) {
         // 这里可以传递 userId 给 partyPlanningAgent，让它也能访问用户记忆
         return partyPlanningAgent.planParty(message);
+    }
+
+    // ==================== 用户画像接口 ====================
+
+    /**
+     * 获取当前用户的画像信息
+     */
+    @GetMapping("/profile")
+    public Result<UserProfileEntity> getUserProfile() {
+        try {
+            Long userId = chatHistoryService.getCurrentUserId();
+            if (userId == null) {
+                return Result.error("用户未登录");
+            }
+            UserProfileEntity profile = userProfileService.getUserProfile(userId);
+            if (profile == null) {
+                return Result.success("暂无画像数据", null);
+            }
+            return Result.success(profile);
+        } catch (Exception e) {
+            return Result.error("获取用户画像失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 触发用户画像分析
+     * 基于历史对话重新分析用户偏好
+     */
+    @PostMapping("/profile/analyze")
+    public Result<UserProfileEntity> analyzeUserProfile() {
+        try {
+            Long userId = chatHistoryService.getCurrentUserId();
+            if (userId == null) {
+                return Result.error("用户未登录");
+            }
+            UserProfileEntity profile = userProfileService.analyzeAndUpdateProfile(userId);
+            if (profile == null) {
+                return Result.error("画像分析失败，可能没有足够的对话数据");
+            }
+            return Result.success(profile);
+        } catch (Exception e) {
+            return Result.error("用户画像分析失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 获取记忆统计信息
+     */
+    @GetMapping("/memory/stats")
+    public Result<Map<String, Object>> getMemoryStats() {
+        try {
+            Long userId = chatHistoryService.getCurrentUserId();
+            if (userId == null) {
+                return Result.error("用户未登录");
+            }
+            Map<String, Object> stats = new HashMap<>();
+            stats.put("memorySize", memoryService.getMemorySize(userId));
+            stats.put("hasSummary", memoryService.getMemorySummary(userId) != null);
+            stats.put("needsCompression", memoryService.needsCompression(userId));
+            return Result.success(stats);
+        } catch (Exception e) {
+            return Result.error("获取记忆统计失败：" + e.getMessage());
+        }
     }
 }
