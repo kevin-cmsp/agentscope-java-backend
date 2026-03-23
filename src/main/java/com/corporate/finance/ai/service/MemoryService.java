@@ -1,97 +1,133 @@
 package com.corporate.finance.ai.service;
 
-import io.agentscope.core.memory.InMemoryMemory;
 import io.agentscope.core.message.Msg;
 import org.springframework.stereotype.Service;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 记忆管理服务
  * 
- * 该服务封装了AgentScope Java的记忆管理功能，
+ * 该服务封装了 AgentScope Java 的记忆管理功能，
  * 提供对话历史和上下文信息的存储、查询和清除功能。
  * 
- * 主要功能：
+ * 主要功能:
  * - 存储对话消息到记忆系统
  * - 获取所有记忆内容
  * - 清除记忆系统中的所有数据
  * 
- * 技术实现：
- * - 基于AgentScope Java的InMemoryMemory
- * - 数据存储在内存中，重启后丢失
- * - 适用于开发和测试环境
+ * 技术实现:
+ * - 基于用户 ID 隔离记忆数据
+ * - 使用 ConcurrentHashMap 实现线程安全的记忆存储
+ * - 支持与数据库会话历史同步
  * 
  * @author Corporate Finance AI Team
- * @version 1.0.0
+ * @version 2.0.0
  */
 @Service
 public class MemoryService {
 
     /**
-     * InMemoryMemory实例
-     * 通过依赖注入获取，由AgentScopeConfig配置
+     * 用户记忆存储 Map
+     * Key: 用户 ID
+     * Value: 该用户的记忆列表
      */
-    private final InMemoryMemory memory;
+    private final Map<Long, List<Msg>> userMemories = new ConcurrentHashMap<>();
 
     /**
-     * 构造函数
+     * 存储消息到指定用户的记忆中
      * 
-     * Spring 4.3+ 支持隐式构造函数注入，
-     * 当类只有一个构造函数时，@Autowired注解可以省略。
-     * 这是Spring Boot 2.6+ 推荐的做法。
-     * 
-     * @param memory InMemoryMemory实例
+     * @param userId 用户 ID
+     * @param message Msg 消息对象
      */
-    public MemoryService(InMemoryMemory memory) {
-        this.memory = memory;
+    public void storeMessage(Long userId, Msg message) {
+        userMemories.computeIfAbsent(userId, k -> new ArrayList<>()).add(message);
     }
 
     /**
-     * 存储消息到记忆系统
+     * 存储消息到指定用户的记忆中 (简化版)
      * 
-     * 该方法将Msg对象添加到记忆系统中，
-     * 用于保存对话历史和上下文信息。
-     * 
-     * @param message Msg消息对象
-     */
-    public void storeMessage(Msg message) {
-        memory.addMessage(message);
-    }
-
-    /**
-     * 存储消息到记忆系统（简化版）
-     * 
-     * 该方法提供简化的消息存储接口，
-     * 接收发送者和内容参数。
-     * 
-     * 注意：由于Msg构造器是private的，
-     * 该方法目前未实现实际存储功能。
-     * 
-     * @param sender 消息发送者（如：user、assistant）
+     * @param userId 用户 ID
+     * @param sender 消息发送者 (如:user、assistant)
      * @param content 消息内容
      */
-    public void storeMessage(String sender, String content) {
-        // 由于Msg构造器是private的，这里我们暂时不存储到memory
-        // 后续可以通过其他方式实现
+    public void storeMessage(Long userId, String sender, String content) {
+        // 使用 Map 存储消息，包含角色和内容
+        Map<String, Object> messageData = new ConcurrentHashMap<>();
+        messageData.put("role", sender);
+        messageData.put("content", content);
+        
+        // 创建 Msg 对象
+        Msg message = Msg.builder()
+                .textContent("[" + sender + "]: " + content)
+                .build();
+        
+        storeMessage(userId, message);
     }
 
     /**
-     * 获取所有记忆内容
+     * 获取指定用户的所有记忆
      * 
-     * 该方法返回记忆系统中存储的所有消息列表。
+     * @param userId 用户 ID
+     * @return 记忆列表
+     */
+    public List<Msg> getAllMessages(Long userId) {
+        return userMemories.getOrDefault(userId, new ArrayList<>());
+    }
+
+    /**
+     * 获取指定用户最近的 N 条记忆 (用于上下文)
+     * 
+     * @param userId 用户 ID
+     * @param limit 最大数量
+     * @return 最近的记忆列表
+     */
+    public List<Msg> getRecentMessages(Long userId, int limit) {
+        List<Msg> messages = getAllMessages(userId);
+        if (messages.isEmpty()) {
+            return messages;
+        }
+        int size = messages.size();
+        int fromIndex = Math.max(0, size - limit);
+        return new ArrayList<>(messages.subList(fromIndex, size));
+    }
+
+    /**
+     * 清除指定用户的记忆
+     * 
+     * @param userId 用户 ID
+     */
+    public void clearMemory(Long userId) {
+        userMemories.remove(userId);
+    }
+
+    /**
+     * 清除所有用户的记忆
+     */
+    public void clearAllMemory() {
+        userMemories.clear();
+    }
+
+    /**
+     * 获取所有记忆内容 (已废弃，请使用 getAllMessages(Long userId))
      * 
      * @return 记忆内容的字符串表示
+     * @deprecated 改用 {@link #getAllMessages(Long)} 支持用户隔离
      */
+    @Deprecated
     public String getAllMessages() {
-        return memory.getMessages().toString();
+        return "错误：该方法已废弃，请使用 getAllMessages(Long userId)";
     }
 
     /**
-     * 清除记忆系统中的所有数据
+     * 清除记忆系统中的所有数据 (已废弃，请使用 clearMemory(Long userId))
      * 
-     * 该方法清空记忆系统中的所有对话历史和上下文信息。
-     * 操作不可逆，请谨慎使用。
+     * @deprecated 改用 {@link #clearMemory(Long)} 支持用户隔离
      */
+    @Deprecated
     public void clearMemory() {
-        memory.clear();
+        // 已废弃，改用 clearMemory(Long userId)
     }
 }

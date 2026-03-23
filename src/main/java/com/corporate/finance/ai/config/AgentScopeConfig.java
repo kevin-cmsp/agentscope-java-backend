@@ -1,40 +1,26 @@
 package com.corporate.finance.ai.config;
 
-import io.agentscope.core.memory.InMemoryMemory;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * AgentScope配置类
+ * AgentScope 配置类
  * 
- * 该类负责配置AgentScope Java框架的核心组件，
- * 包括记忆管理、工具注册等基础功能。
+ * 该类负责配置 AgentScope Java 框架的核心组件。
  * 
- * 主要功能：
- * - 配置InMemoryMemory作为默认记忆存储
- * - 提供AgentScope核心组件的Bean定义
+ * 注意:
+ * - InMemoryMemory 已移除，改用基于用户 ID 的 MemoryService
+ * - 用户记忆现在由 MemoryService 通过 ConcurrentHashMap 管理
+ * - 每个用户拥有独立的记忆空间
  * 
  * @author Corporate Finance AI Team
- * @version 1.0.0
+ * @version 2.0.0
  */
 @Configuration
 public class AgentScopeConfig {
 
-    /**
-     * 创建InMemoryMemory Bean
-     * 
-     * InMemoryMemory是AgentScope Java内置的内存级记忆存储实现，
-     * 用于存储对话历史和上下文信息。
-     * 
-     * 特点：
-     * - 数据存储在内存中，重启后丢失
-     * - 适用于开发和测试环境
-     * - 生产环境建议使用持久化存储方案
-     * 
-     * @return InMemoryMemory实例
-     */
-    @Bean
-    public InMemoryMemory memory() {
-        return new InMemoryMemory();
-    }
+    // 注意：InMemoryMemory Bean 已移除
+    // 原因：
+    // 1. 全局单例导致所有用户记忆混在一起
+    // 2. 无法实现用户隔离
+    // 3. 改用 MemoryService 的 ConcurrentHashMap 方案
 }

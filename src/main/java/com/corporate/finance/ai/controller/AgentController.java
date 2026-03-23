@@ -12,6 +12,7 @@ import com.corporate.finance.ai.system.service.ChatHistoryService;
 import com.corporate.finance.ai.tool.ActivityTool;
 import com.corporate.finance.ai.tool.BudgetTool;
 import com.corporate.finance.ai.tool.CalculatorTool;
+import io.agentscope.core.message.Msg;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -191,7 +192,7 @@ public class AgentController {
     public Result<Map<String, Object>> chat(@RequestBody Map<String, Object> request) {
         // 获取用户消息
         String message = (String) request.get("message");
-        // 获取会话ID（可选）
+        // 获取会话 ID(可选)
         Long conversationId = null;
         Object convIdObj = request.get("conversationId");
         if (convIdObj != null) {
@@ -201,30 +202,31 @@ public class AgentController {
                 conversationId = Long.parseLong((String) convIdObj);
             }
         }
-        
         // 参数校验
         if (message == null || message.isEmpty()) {
             return Result.error("消息内容不能为空");
         }
-
         try {
-            // 如果没有会话ID，自动创建新会话
+            // 获取当前登录用户 ID
+            Long userId = chatHistoryService.getCurrentUserId();
+            if (userId == null) {
+                return Result.error("用户未登录");
+            }
+            
+            // 如果没有会话 ID，自动创建新会话
             if (conversationId == null) {
                 String title = message.length() > 20 ? message.substring(0, 20) : message;
                 ConversationEntity conversation = chatHistoryService.createConversation(title);
                 conversationId = conversation.getId();
             }
-
             // 保存用户消息到数据库
             chatHistoryService.saveMessage(conversationId, "user", message);
-
-            // 存储用户消息到记忆
-            memoryService.storeMessage("user", message);
-            
+            // 存储用户消息到记忆 (使用用户 ID 隔离)
+            memoryService.storeMessage(userId, "user", message);
             // 识别意图并处理
             String intent = identifyIntent(message);
-            String response;
             System.out.println("AgentController.chat intent:"+intent);
+            String response;
             switch (intent) {
                 case "weather":
                     response = handleWeatherRequest(message);
@@ -233,33 +235,31 @@ public class AgentController {
                     response = handleCalculatorRequest(message);
                     break;
                 case "data":
-                    response = handleDataRequest(message);
+                    response = handleDataRequest(message, userId);
                     break;
                 case "knowledge":
-                    response = handleKnowledgeRequest(message);
+                    response = handleKnowledgeRequest(message, userId);
                     break;
                 case "party":
                     response = handlePartyRequest(message);
                     break;
                 default:
-                    response = handleGeneralRequest(message);
+                    response = handleGeneralRequest(message, userId);
                     break;
             }
-            
             // 保存助手回复到数据库
             chatHistoryService.saveMessage(conversationId, "assistant", response);
-
-            // 存储响应到记忆
-            memoryService.storeMessage("assistant", response);
-            
+            // 存储响应到记忆 (使用用户 ID 隔离)
+            memoryService.storeMessage(userId, "assistant", response);
             Map<String, Object> data = new HashMap<>();
             data.put("status", "success");
             data.put("content", response);
             data.put("conversationId", conversationId);
             return Result.success(data);
         } catch (Exception e) {
-            String errorMessage = "处理请求失败：" + e.getMessage();
-            memoryService.storeMessage("assistant", errorMessage);
+            String errorMessage = "处理请求失败:" + e.getMessage();
+            System.err.println("处理请求失败:" + e.getMessage());
+            e.printStackTrace();
             return Result.error(errorMessage);
         }
     }
@@ -584,112 +584,34 @@ public class AgentController {
         }
     }
 
-    /**
-     * 处理智能查数请求
-     * 
-     * @param message 用户消息
-     * @return 查数结果
-     */
-    private String handleDataRequest(String message) {
+    private String handleGeneralRequest(String message, Long userId) {
         try {
-            // 构造智能查数回复提示词
-            String prompt = "你是企业数据分析助手。请根据用户的数据查询请求，提供专业的回复。\n" +
-                           "\n" +
-                           "注意：目前数据查询功能正在完善中。\n" +
-                           "\n" +
-                           "回答要求：\n" +
-                           "1. 说明当前数据功能的限制\n" +
-                           "2. 建议用户通过正式的数据报表系统查询\n" +
-                           "3. 语气专业、友好\n" +
-                           "\n" +
-                           "用户消息：" + message + "\n" +
-                           "助手回答：";
+            // 获取最近 10 条历史对话作为上下文
+            List<Msg> recentMessages = memoryService.getRecentMessages(userId, 10);
             
-            String response = callDashScopeModel(prompt);
+            // 构造包含上下文的提示词
+            StringBuilder contextBuilder = new StringBuilder();
+            contextBuilder.append("你是一个专业的企业智能助手。请友好、专业地回答用户的问题。\n\n");
+            contextBuilder.append("回答要求:\n");
+            contextBuilder.append("1. 语气友好、专业、简洁\n");
+            contextBuilder.append("2. 如果是查询公司信息 (如华为、浪潮等),提供基本的企业介绍\n");
+            contextBuilder.append("3. 如果是问候语，礼貌回应\n");
+            contextBuilder.append("4. 如果问题不明确，引导用户提供更详细的信息\n");
+            contextBuilder.append("5. 回答控制在 200 字以内\n\n");
             
-            if (response != null && !response.trim().isEmpty()) {
-                // 处理换行符
-                return formatResponseText(response.trim());
+            // 添加历史对话上下文
+            if (!recentMessages.isEmpty()) {
+                contextBuilder.append("历史对话:\n");
+                for (Msg msg : recentMessages) {
+                    contextBuilder.append(msg.getTextContent()).append("\n");
+                }
+                contextBuilder.append("\n当前问题:").append(message).append("\n助手回答:");
+            } else {
+                contextBuilder.append("用户消息:").append(message).append("\n助手回答:");
             }
-        } catch (Exception e) {
-            System.err.println("智能查数回复失败：" + e.getMessage());
-        }
-        
-        // 兜底回复
-        return "智能查数功能正在开发中，敬请期待！目前建议您通过企业的数据报表系统或联系财务部门获取相关数据。";
-    }
-
-    /**
-     * 处理知识库请求
-     * 
-     * @param message 用户消息
-     * @return 知识库查询结果
-     */
-    private String handleKnowledgeRequest(String message) {
-        try {
-            // 构造知识库回复提示词
-            String prompt = "你是企业知识库助手。请根据用户的问题，提供专业的知识库查询服务。\n" +
-                           "\n" +
-                           "注意：目前知识库功能正在完善中，对于常见问题请尽量提供帮助。\n" +
-                           "\n" +
-                           "回答要求：\n" +
-                           "1. 语气专业、友好\n" +
-                           "2. 如果问题涉及公司制度、流程、文档等，说明知识库正在建设中\n" +
-                           "3. 提供可能的解决方向或建议\n" +
-                           "4. 引导用户联系相关部门获取准确信息\n" +
-                           "\n" +
-                           "用户消息：" + message + "\n" +
-                           "助手回答：";
             
-            String response = callDashScopeModel(prompt);
-            
-            if (response != null && !response.trim().isEmpty()) {
-                // 处理换行符
-                return formatResponseText(response.trim());
-            }
-        } catch (Exception e) {
-            System.err.println("知识库回复失败：" + e.getMessage());
-        }
-        
-        // 兜底回复
-        return "知识库功能正在开发中，敬请期待！目前我可以帮您解答一些常见问题，或者您可以联系相关部门获取更准确的信息。";
-    }
-
-    /**
-     * 处理活动策划请求
-     * 
-     * @param message 用户消息
-     * @return 活动策划方案
-     */
-    private String handlePartyRequest(String message) {
-        return partyPlanningAgent.planParty(message);
-    }
-
-    /**
-     * 处理通用请求
-     * 
-     * 使用大模型进行智能回复，支持上下文记忆。
-     * 
-     * @param message 用户消息
-     * @return 大模型回复
-     */
-    private String handleGeneralRequest(String message) {
-        try {
-            // 构造友好的回复提示词
-            String prompt = "你是一个专业的企业智能助手。请友好、专业地回答用户的问题。\n" +
-                           "\n" +
-                           "回答要求：\n" +
-                           "1. 语气友好、专业、简洁\n" +
-                           "2. 如果是查询公司信息（如华为、浪潮等），提供基本的企业介绍\n" +
-                           "3. 如果是问候语，礼貌回应\n" +
-                           "4. 如果问题不明确，引导用户提供更详细的信息\n" +
-                           "5. 回答控制在 200 字以内\n" +
-                           "\n" +
-                           "用户消息：" + message + "\n" +
-                           "助手回答：";
-            
-            // 调用大模型获取回复
-            String response = callDashScopeModel(prompt);
+            // 调用大模型获取回复 (使用包含上下文的提示词)
+            String response = callDashScopeModel(contextBuilder.toString());
             
             // 如果大模型返回为空或调用失败，使用兜底回复
             if (response == null || response.trim().isEmpty()) {
@@ -701,7 +623,7 @@ public class AgentController {
             
         } catch (Exception e) {
             // 大模型调用失败，使用兜底回复
-            System.err.println("大模型回复失败：" + e.getMessage());
+            System.err.println("大模型回复失败:" + e.getMessage());
             return generateFallbackResponse(message);
         }
     }
@@ -769,12 +691,18 @@ public class AgentController {
         }
 
         try {
-            // 调用WeatherService查询天气
+            // 获取当前登录用户 ID
+            Long userId = chatHistoryService.getCurrentUserId();
+            if (userId == null) {
+                return "错误：用户未登录";
+            }
+            
+            // 调用 WeatherService 查询天气
             String weather = weatherService.getWeather(city);
             
-            // 存储到记忆中
-            memoryService.storeMessage("user", "查询城市天气：" + city);
-            memoryService.storeMessage("assistant", "天气信息：" + weather);
+            // 存储到记忆中 (使用用户 ID 隔离)
+            memoryService.storeMessage(userId, "user", "查询城市天气：" + city);
+            memoryService.storeMessage(userId, "assistant", "天气信息：" + weather);
             
             return weather;
         } catch (Exception e) {
@@ -855,23 +783,29 @@ public class AgentController {
         }
 
         try {
-            // 获取Agent实例
+            // 获取当前登录用户 ID
+            Long userId = chatHistoryService.getCurrentUserId();
+            if (userId == null) {
+                return "错误：用户未登录";
+            }
+            
+            // 获取 Agent 实例
             Object agent = agentManagerService.getAgent(agentId);
             
             if (agent != null) {
                 // 执行任务（目前返回模拟结果）
                 String result = "执行任务：" + task;
                 
-                // 存储到记忆中
-                memoryService.storeMessage("user", task);
-                memoryService.storeMessage("assistant", result);
+                // 存储到记忆中 (使用用户 ID 隔离)
+                memoryService.storeMessage(userId, "user", task);
+                memoryService.storeMessage(userId, "assistant", result);
                 
                 return result;
             } else {
-                return "Agent不存在";
+                return "Agent 不存在";
             }
         } catch (Exception e) {
-            return "执行Agent任务失败：" + e.getMessage();
+            return "执行 Agent 任务失败：" + e.getMessage();
         }
     }
 
@@ -920,20 +854,36 @@ public class AgentController {
      */
     @GetMapping("/memory")
     public String getMemory() {
-        return memoryService.getAllMessages();
+        try {
+            // 获取当前登录用户 ID
+            Long userId = chatHistoryService.getCurrentUserId();
+            if (userId == null) {
+                return "错误：用户未登录";
+            }
+            
+            // 获取该用户的所有记忆
+            List<Msg> messages = memoryService.getAllMessages(userId);
+            return messages.toString();
+        } catch (Exception e) {
+            return "获取记忆失败：" + e.getMessage();
+        }
     }
 
-    /**
-     * 清除记忆
-     * 
-     * 清空当前记忆系统中的所有对话历史。
-     * 
-     * @return 操作结果
-     */
     @PostMapping("/memory/clear")
     public String clearMemory() {
-        memoryService.clearMemory();
-        return "记忆已清除";
+        try {
+            // 获取当前登录用户 ID
+            Long userId = chatHistoryService.getCurrentUserId();
+            if (userId == null) {
+                return "错误：用户未登录";
+            }
+            
+            // 清除该用户的记忆
+            memoryService.clearMemory(userId);
+            return "记忆已清除";
+        } catch (Exception e) {
+            return "清除记忆失败：" + e.getMessage();
+        }
     }
 
     /**
@@ -1026,6 +976,12 @@ public class AgentController {
         }
 
         try {
+            // 获取当前登录用户 ID
+            Long userId = chatHistoryService.getCurrentUserId();
+            if (userId == null) {
+                return "错误：用户未登录";
+            }
+            
             double a = ((Number) aObj).doubleValue();
             double b = ((Number) bObj).doubleValue();
             
@@ -1050,8 +1006,9 @@ public class AgentController {
                     return "错误：不支持的操作类型：" + operation;
             }
             
-            memoryService.storeMessage("user", String.format("计算：%s(%.2f, %.2f)", operation, a, b));
-            memoryService.storeMessage("assistant", result);
+            // 存储到记忆中 (使用用户 ID 隔离)
+            memoryService.storeMessage(userId, "user", String.format("计算：%s(%.2f, %.2f)", operation, a, b));
+            memoryService.storeMessage(userId, "assistant", result);
             
             return result;
         } catch (ClassCastException e) {
@@ -1098,5 +1055,85 @@ public class AgentController {
                   .replace("\\r\\n", "\r\n")
                   .replace("\\r", "\r")
                   .replace("\\t", "\t");
+    }
+
+    private String handleDataRequest(String message, Long userId) {
+        try {
+            // 获取最近的历史对话作为上下文
+            List<Msg> recentMessages = memoryService.getRecentMessages(userId, 5);
+            
+            // 构造智能查数回复提示词 (包含上下文)
+            StringBuilder promptBuilder = new StringBuilder();
+            promptBuilder.append("你是企业数据分析助手。请根据用户的数据查询请求，提供专业的回复。\n\n");
+            promptBuilder.append("注意：目前数据查询功能正在完善中。\n\n");
+            promptBuilder.append("回答要求:\n");
+            promptBuilder.append("1. 说明当前数据功能的限制\n");
+            promptBuilder.append("2. 建议用户通过正式的数据报表系统查询\n");
+            promptBuilder.append("3. 语气专业、友好\n\n");
+            
+            // 添加历史上下文
+            if (!recentMessages.isEmpty()) {
+                promptBuilder.append("历史对话:\n");
+                for (Msg msg : recentMessages) {
+                    promptBuilder.append(msg.getTextContent()).append("\n");
+                }
+                promptBuilder.append("\n");
+            }
+            
+            promptBuilder.append("用户消息:").append(message).append("\n助手回答:");
+            
+            String response = callDashScopeModel(promptBuilder.toString());
+            
+            if (response != null && !response.trim().isEmpty()) {
+                return formatResponseText(response.trim());
+            }
+        } catch (Exception e) {
+            System.err.println("智能查数回复失败:" + e.getMessage());
+        }
+        
+        return "智能查数功能正在开发中，敬请期待！目前建议您通过企业的数据报表系统或联系财务部门获取相关数据。";
+    }
+
+    private String handleKnowledgeRequest(String message, Long userId) {
+        try {
+            // 获取最近的历史对话作为上下文
+            List<Msg> recentMessages = memoryService.getRecentMessages(userId, 5);
+            
+            // 构造知识库回复提示词 (包含上下文)
+            StringBuilder promptBuilder = new StringBuilder();
+            promptBuilder.append("你是企业知识库助手。请根据用户的问题，提供专业的知识库查询服务。\n\n");
+            promptBuilder.append("注意：目前知识库功能正在完善中，对于常见问题请尽量提供帮助。\n\n");
+            promptBuilder.append("回答要求:\n");
+            promptBuilder.append("1. 语气专业、友好\n");
+            promptBuilder.append("2. 如果问题涉及公司制度、流程、文档等，说明知识库正在建设中\n");
+            promptBuilder.append("3. 提供可能的解决方向或建议\n");
+            promptBuilder.append("4. 引导用户联系相关部门获取准确信息\n\n");
+            
+            // 添加历史上下文
+            if (!recentMessages.isEmpty()) {
+                promptBuilder.append("历史对话:\n");
+                for (Msg msg : recentMessages) {
+                    promptBuilder.append(msg.getTextContent()).append("\n");
+                }
+                promptBuilder.append("\n");
+            }
+            
+            promptBuilder.append("用户消息:").append(message).append("\n助手回答:");
+            
+            String response = callDashScopeModel(promptBuilder.toString());
+            
+            if (response != null && !response.trim().isEmpty()) {
+                return formatResponseText(response.trim());
+            }
+        } catch (Exception e) {
+            System.err.println("知识库回复失败:" + e.getMessage());
+        }
+        
+        return "知识库功能正在开发中，敬请期待！目前我可以帮您解答一些常见问题，或者您可以联系相关部门获取更准确的信息。";
+    }
+
+    private String handlePartyRequest(String message) {
+        // 这里可以传递 userId 给 partyPlanningAgent，让它也能访问用户记忆
+        return partyPlanningAgent.planParty(message);
     }
 }
