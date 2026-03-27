@@ -1,0 +1,36 @@
+# 拉取镜像（根据地理位置选择最近的 Registry）
+docker pull modelscope-registry.cn-beijing.cr.aliyuncs.com/modelscope-repo/sirchmunk:ubuntu22.04-py312-0.0.6
+
+# 删除历史容器
+docker stop sirchmunk && docker rm sirchmunk
+
+# 创建挂载目录
+mkdir /data/sirchmunk
+mkdir /data/docs
+
+#存放文档到目录 /data/docs  保证没有中文乱码
+
+#启动容器
+docker run -d \
+  --name sirchmunk \
+  --cpus="4" \
+  --memory="4g" \
+  -p 8584:8584 \
+  -e LLM_API_KEY="sk-sp-xxxxxxxxxxxxxxxxxxxxxxxxxxx" \
+  -e LLM_BASE_URL="https://coding.dashscope.aliyuncs.com/v1" \
+  -e LLM_MODEL_NAME="qwen3.5-plus" \
+  -e LLM_TIMEOUT=60.0 \
+  -e UI_THEME=dark \
+  -e UI_LANGUAGE=zh \
+  -e SIRCHMUNK_VERBOSE=true \
+  -e SIRCHMUNK_INITIAL_INDEX=true \
+  -e SIRCHMUNK_SEARCH_PATHS=/mnt/docs \
+  -e ENABLE_PDF_PARSER=true \
+  -e ENABLE_DOCX_PARSER=true \
+  -e ENABLE_MD_PARSER=true \
+  -e ENABLE_TXT_PARSER=true \
+  -e CHAT_HISTORY_MAX_TURNS=5 \
+  -e CHAT_HISTORY_MAX_TOKENS=32000 \
+  -v /data/sirchmunk:/data/sirchmunk \
+  -v /data/docs:/mnt/docs:ro \
+  modelscope-registry.cn-beijing.cr.aliyuncs.com/modelscope-repo/sirchmunk:ubuntu22.04-py312-0.0.6

@@ -5,10 +5,12 @@ import com.corporate.finance.ai.agent.PartyPlanningAgentLevel;
 import com.corporate.finance.ai.service.AgentManagerService;
 import com.corporate.finance.ai.service.MemoryCompressService;
 import com.corporate.finance.ai.service.MemoryService;
+import com.corporate.finance.ai.service.SirchmunkService;
 import com.corporate.finance.ai.service.SkillService;
 import com.corporate.finance.ai.service.UserProfileService;
 import com.corporate.finance.ai.service.WeatherService;
 import com.corporate.finance.ai.system.entity.ConversationEntity;
+import com.corporate.finance.ai.system.entity.MessageEntity;
 import com.corporate.finance.ai.system.entity.UserProfileEntity;
 import com.corporate.finance.ai.system.common.Result;
 import com.corporate.finance.ai.system.service.ChatHistoryService;
@@ -16,6 +18,8 @@ import com.corporate.finance.ai.tool.ActivityTool;
 import com.corporate.finance.ai.tool.BudgetTool;
 import com.corporate.finance.ai.tool.CalculatorTool;
 import io.agentscope.core.message.Msg;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -27,32 +31,38 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Arrays;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+
 /**
- * Agent REST API控制器
+ * Agent REST API 控制器
  * 
- * 该控制器提供Agent管理和天气查询的RESTful API接口。
- * 所有接口都以/api为前缀。
+ * 该控制器提供 Agent 管理和天气查询的 RESTful API 接口。
+ * 所有接口都以/api 为前缀。
  * 
  * 主要功能：
  * - 统一聊天接口（处理所有用户请求）
  * - 天气查询接口
- * - Agent创建、查询、执行、删除接口
+ * - Agent 创建、查询、执行、删除接口
  * - 记忆管理接口
  * - 技能管理接口
  * 
- * API端点：
+ * API 端点：
  * - POST /api/chat - 统一聊天接口（推荐）
  * - POST /api/weather - 查询天气
- * - POST /api/agents - 创建Agent
- * - GET /api/agents/{agentId} - 获取Agent信息
- * - POST /api/agents/{agentId}/execute - 执行Agent任务
- * - GET /api/agents - 列出所有Agent
- * - DELETE /api/agents/{agentId} - 删除Agent
+ * - POST /api/agents - 创建 Agent
+ * - GET /api/agents/{agentId} - 获取 Agent 信息
+ * - POST /api/agents/{agentId}/execute - 执行 Agent 任务
+ * - GET /api/agents - 列出所有 Agent
+ * - DELETE /api/agents/{agentId} - 删除 Agent
  * - GET /api/memory - 获取记忆内容
  * - POST /api/memory/clear - 清除记忆
  * - POST /api/skills/register - 注册技能
@@ -61,8 +71,8 @@ import java.util.Arrays;
  * - POST /api/skills/calculator - 执行计算器技能
  * 
  * 技术实现：
- * - 使用构造函数注入实现依赖注入（Spring Boot推荐做法）
- * - 所有依赖均为final，确保不可变性
+ * - 使用构造函数注入实现依赖注入（Spring Boot 推荐做法）
+ * - 所有依赖均为 final，确保不可变性
  * 
  * @author Corporate Finance AI Team
  * @version 1.0.0
@@ -71,8 +81,10 @@ import java.util.Arrays;
 @RequestMapping("/api")
 public class AgentController {
 
+    private static final Logger logger = LoggerFactory.getLogger(AgentController.class);
+
     /**
-     * Agent管理服务实例
+     * Agent 管理服务实例
      */
     private final AgentManagerService agentManagerService;
 
@@ -107,7 +119,7 @@ public class AgentController {
     private final ActivityTool activityTool;
 
     /**
-     * 活动策划Agent实例
+     * 活动策划 Agent 实例
      */
     private final PartyPlanningAgent partyPlanningAgent;
 
@@ -138,26 +150,30 @@ public class AgentController {
     @Autowired
     private UserProfileService userProfileService;
 
+    @Autowired
+    private SirchmunkService sirchmunkService;
+
     /**
      * 构造函数
      * 
-     * 通过构造函数注入所有依赖，这是Spring Boot推荐的做法。
+     * 通过构造函数注入所有依赖，这是 Spring Boot 推荐的做法。
      * 优点：
      * - 依赖明确，易于测试
-     * - 字段可以声明为final，确保不可变性
+     * - 字段可以声明为 final，确保不可变性
      * - 避免使用@Autowired字段注入
      * 
-     * @param agentManagerService Agent管理服务
+     * @param agentManagerService Agent 管理服务
      * @param weatherService 天气查询服务
      * @param memoryService 记忆管理服务
      * @param skillService 技能管理服务
      * @param calculatorTool 计算器工具
      * @param budgetTool 预算工具
      * @param activityTool 活动安排工具
-     * @param partyPlanningAgent 活动策划Agent
+     * @param partyPlanningAgent 活动策划 Agent
      * @param dashscopeApiKey DashScope API Key
      * @param dashscopeBaseUrl DashScope Base URL
      * @param dashscopeModel DashScope Model
+     * @param sirchmunkService Sirchmunk 知识库服务
      */
     public AgentController(AgentManagerService agentManagerService,
                           WeatherService weatherService,
@@ -169,7 +185,8 @@ public class AgentController {
                           PartyPlanningAgent partyPlanningAgent,
                           @Value("${model.services.dashscope.api-key}") String dashscopeApiKey,
                           @Value("${model.services.dashscope.base-url}") String dashscopeBaseUrl,
-                          @Value("${model.services.dashscope.model}") String dashscopeModel) {
+                          @Value("${model.services.dashscope.model}") String dashscopeModel,
+                          SirchmunkService sirchmunkService) {
         this.agentManagerService = agentManagerService;
         this.weatherService = weatherService;
         this.memoryService = memoryService;
@@ -181,6 +198,7 @@ public class AgentController {
         this.dashscopeApiKey = dashscopeApiKey;
         this.dashscopeBaseUrl = dashscopeBaseUrl;
         this.dashscopeModel = dashscopeModel;
+        this.sirchmunkService = sirchmunkService;
     }
 
     /**
@@ -244,16 +262,16 @@ public class AgentController {
                     response = handleCalculatorRequest(message);
                     break;
                 case "data":
-                    response = handleDataRequest(message, userId);
+                    response = handleDataRequest(message, userId, conversationId);
                     break;
                 case "knowledge":
-                    response = handleKnowledgeRequest(message, userId);
+                    response = handleKnowledgeRequest(message, userId, conversationId);
                     break;
                 case "party":
                     response = handlePartyRequest(message);
                     break;
                 default:
-                    response = handleGeneralRequest(message, userId);
+                    response = handleGeneralRequest(message, userId, conversationId);
                     break;
             }
             // 保存助手回复到数据库
@@ -271,12 +289,30 @@ public class AgentController {
             data.put("status", "success");
             data.put("content", response);
             data.put("conversationId", conversationId);
+
+            // 附带参考来源信息（不再限制只有 knowledge 意图才返回，general 意图也可能命中知识库）
+            try {
+                SirchmunkService.SirchmunkSearchResult knowledgeResult = lastKnowledgeSearchResult.get();
+                if (knowledgeResult != null) {
+                    if (knowledgeResult.getContext() != null) {
+                        data.put("references", knowledgeResult.getContext());
+                    } else if (knowledgeResult.getSummary() != null) {
+                        // context 为空时使用 summary 作为参考信息
+                        data.put("references", knowledgeResult.getSummary());
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("获取知识库参考信息失败：{}", e.getMessage());
+            }
+
             return Result.success(data);
         } catch (Exception e) {
             String errorMessage = "处理请求失败:" + e.getMessage();
-            System.err.println("处理请求失败:" + e.getMessage());
-            e.printStackTrace();
+            logger.error("处理请求失败: {}", e.getMessage(), e);
             return Result.error(errorMessage);
+        } finally {
+            // 无论成功或失败，都清理 ThreadLocal，防止线程池复用时数据泄漏
+            lastKnowledgeSearchResult.remove();
         }
     }
 
@@ -318,16 +354,18 @@ public class AgentController {
                            "   示例：10 加 5 等于多少？3 乘以 4 是多少？计算 100/5\n" +
                            "3. data - 智能查数（企业数据查询）\n" +
                            "   示例：上个月销量是多少？今年 Q1 的收入情况？利润报表\n" +
-                           "4. knowledge - 知识库查询（公司制度、使用指南等）\n" +
-                           "   示例：公司规章制度？如何使用系统？报销流程是什么？\n" +
+                           "4. knowledge - 知识库查询（公司制度、使用指南、白皮书、产品文档、技术资料、技术操作指南等）\n" +
+                           "   示例：公司规章制度？如何使用系统？报销流程是什么？根据xx白皮书介绍xx平台？xx产品文档？如何升级openssh？如何安装某软件？如何配置某服务？centos如何升级？\n" +
                            "5. party - 活动策划\n" +
                            "   示例：帮我策划一场商务活动，需要活动计划，生日聚会安排\n" +
                            "6. general - 其他通用问题\n" +
-                           "   示例：你好，今天过得怎么样？华为，浪潮集团\n" +
+                           "   示例：你好，今天过得怎么样？\n" +
                            "\n" +
                            "注意：\n" +
-                           "- 仅查询公司名称、简单问候等没有明确功能需求的，归类为 general\n" +
-                           "- 询问公司制度、文档、流程的，归类为 knowledge\n" +
+                           "- 仅简单问候等没有明确功能需求的，归类为 general\n" +
+                           "- 询问公司制度、文档、流程、白皮书、产品介绍、技术资料的，归类为 knowledge\n" +
+                           "- 提到\"根据\"某文档或资料来介绍/说明某内容的，归类为 knowledge\n" +
+                           "- 涉及技术操作的问题（如何升级、安装、配置、部署某软件或系统），归类为 knowledge\n" +
                            "- 只返回意图类型单词，不要返回任何其他内容\n" +
                            "\n" +
                            "用户消息：" + message + "\n" +
@@ -370,21 +408,44 @@ public class AgentController {
     }
 
     /**
-     * 调用 DashScope 大模型
-     * 
+     * 调用 DashScope 大模型（默认 150 tokens，用于意图识别等短回复场景）
+     *
      * @param prompt 提示词
-     * @return 大模型返回的意图类型
+     * @return 大模型返回的文本
      * @throws Exception 异常
      */
     private String callDashScopeModel(String prompt) throws Exception {
+        return callDashScopeModel(prompt, 150);
+    }
+
+    /**
+     * 调用 DashScope 大模型
+     *
+     * @param prompt 提示词
+     * @param maxTokens 最大生成 token 数（知识库等需要详细回复的场景应使用较大值，如 4096）
+     * @return 大模型返回的文本
+     * @throws Exception 异常
+     */
+    private String callDashScopeModel(String prompt, int maxTokens) throws Exception {
         // DashScope API 配置（从配置文件读取）
         String url = dashscopeBaseUrl + "/services/aigc/text-generation/generation";
 
-        // 构建消息列表（使用 messages 格式）
-        String messagesJson = "[{\"role\":\"user\",\"content\":\"" + escapeJson(prompt) + "\"}]";
+        // 使用 ObjectMapper 构建请求体（确保 JSON 转义正确，避免特殊字符导致 JSON 格式错误）
+        ObjectNode requestRoot = objectMapper.createObjectNode();
+        requestRoot.put("model", dashscopeModel);
 
-        // 构建完整的请求体
-        String jsonBody = "{\"model\":\"" + dashscopeModel + "\",\"input\":{\"messages\":" + messagesJson + "},\"parameters\":{\"max_tokens\":150,\"temperature\":0.3,\"top_p\":0.8}}";
+        ObjectNode input = requestRoot.putObject("input");
+        ArrayNode messagesArray = input.putArray("messages");
+        ObjectNode userMessage = messagesArray.addObject();
+        userMessage.put("role", "user");
+        userMessage.put("content", prompt);
+
+        ObjectNode parameters = requestRoot.putObject("parameters");
+        parameters.put("max_tokens", maxTokens);
+        parameters.put("temperature", 0.3);
+        parameters.put("top_p", 0.8);
+
+        String jsonBody = objectMapper.writeValueAsString(requestRoot);
 
         // 发送 HTTP 请求
         URL obj = new URL(url);
@@ -395,8 +456,8 @@ public class AgentController {
         con.setDoOutput(true);
 
         try (OutputStream os = con.getOutputStream()) {
-            byte[] input = jsonBody.getBytes(StandardCharsets.UTF_8);
-            os.write(input, 0, input.length);
+            byte[] inputBytes = jsonBody.getBytes(StandardCharsets.UTF_8);
+            os.write(inputBytes, 0, inputBytes.length);
         }
 
         // 读取响应
@@ -410,16 +471,28 @@ public class AgentController {
                     response.append(inputLine);
                 }
 
-                // 解析响应：output.text
+                // 使用 ObjectMapper 解析响应 JSON（正确处理转义字符，避免内容截断）
                 String responseStr = response.toString();
-                if (responseStr.contains("\"text\":\"")) {
-                    int start = responseStr.indexOf("\"text\":\"") + 8;
-                    int end = responseStr.indexOf("\"", start);
-                    if (end > start) {
-                        String result = responseStr.substring(start, end).trim();
-                        // 清理返回结果中的特殊字符（保留转义字符，由上层处理）
-                        return result.replaceAll("[\\r\\n]+", " ").trim();
+                JsonNode responseNode = objectMapper.readTree(responseStr);
+
+                // 尝试 DashScope 原生格式：output.text
+                String text = null;
+                JsonNode textNode = responseNode.path("output").path("text");
+                if (!textNode.isMissingNode() && !textNode.isNull()) {
+                    text = textNode.asText();
+                }
+
+                // 尝试 choices 格式：output.choices[0].message.content
+                if (text == null || text.trim().isEmpty()) {
+                    JsonNode contentNode = responseNode.path("output").path("choices")
+                            .path(0).path("message").path("content");
+                    if (!contentNode.isMissingNode() && !contentNode.isNull()) {
+                        text = contentNode.asText();
                     }
+                }
+
+                if (text != null && !text.trim().isEmpty()) {
+                    return text.trim();
                 }
             }
         } else {
@@ -503,13 +576,21 @@ public class AgentController {
             return "data";
         }
         
-        // 5. 知识库相关关键词（制度、流程）
+        // 5. 知识库相关关键词（制度、流程、文档、技术操作等）
         if (lowerMessage.contains("制度") || lowerMessage.contains("流程") || 
             lowerMessage.contains("规章") || lowerMessage.contains("规定") ||
             lowerMessage.contains("手册") || lowerMessage.contains("指南") ||
             lowerMessage.contains("教程") || lowerMessage.contains("怎么使用") ||
             lowerMessage.contains("如何使用") || lowerMessage.contains("报销流程") ||
-            lowerMessage.contains("请假流程")) {
+            lowerMessage.contains("请假流程") || lowerMessage.contains("白皮书") ||
+            lowerMessage.contains("文档") || lowerMessage.contains("资料") ||
+            lowerMessage.contains("知识库") || (lowerMessage.contains("根据") && lowerMessage.contains("介绍")) ||
+            lowerMessage.contains("如何升级") || lowerMessage.contains("怎么升级") ||
+            lowerMessage.contains("如何安装") || lowerMessage.contains("怎么安装") ||
+            lowerMessage.contains("如何配置") || lowerMessage.contains("怎么配置") ||
+            lowerMessage.contains("如何部署") || lowerMessage.contains("怎么部署") ||
+            lowerMessage.contains("openssh") || lowerMessage.contains("openssl") ||
+            lowerMessage.contains("升级") || lowerMessage.contains("版本")) {
             return "knowledge";
         }
         
@@ -600,20 +681,61 @@ public class AgentController {
         }
     }
 
-    private String handleGeneralRequest(String message, Long userId) {
+    private String handleGeneralRequest(String message, Long userId, Long conversationId) {
         try {
-            // 获取最近 10 条历史对话作为上下文
-            List<Msg> recentMessages = memoryService.getRecentMessages(userId, 10);
+            // 1. 先尝试从知识库搜索，看是否有相关内容
+            String knowledgeContent = null;
+            String contextContent = null;
+            try {
+                SirchmunkService.SirchmunkSearchResult searchResult = sirchmunkService.search(message);
+                if (searchResult != null && searchResult.hasContent()) {
+                    knowledgeContent = searchResult.getSummary();
+                    if (searchResult.getContext() != null) {
+                        Object ctx = searchResult.getContext();
+                        if (ctx instanceof String) {
+                            contextContent = (String) ctx;
+                        } else {
+                            contextContent = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(ctx);
+                        }
+                    }
+                    logger.info("General 请求命中知识库，summary长度：{}，context长度：{}",
+                            knowledgeContent != null ? knowledgeContent.length() : 0,
+                            contextContent != null ? contextContent.length() : 0);
+                    // 保存搜索结果，供 chat 方法获取参考信息
+                    lastKnowledgeSearchResult.set(searchResult);
+                }
+            } catch (Exception e) {
+                logger.warn("General 请求搜索知识库失败：{}", e.getMessage());
+            }
+
+            // 2. 获取当前会话的历史消息（仅当前会话，避免跨会话污染）
+            List<MessageEntity> conversationMessages = getConversationContext(conversationId, 10);
             
-            // 构造包含上下文的提示词
+            // 3. 构造包含上下文的提示词
             StringBuilder contextBuilder = new StringBuilder();
             contextBuilder.append("你是一个专业的企业智能助手。请友好、专业地回答用户的问题。\n\n");
-            contextBuilder.append("回答要求:\n");
-            contextBuilder.append("1. 语气友好、专业、简洁\n");
-            contextBuilder.append("2. 如果是查询公司信息 (如华为、浪潮等),提供基本的企业介绍\n");
-            contextBuilder.append("3. 如果是问候语，礼貌回应\n");
-            contextBuilder.append("4. 如果问题不明确，引导用户提供更详细的信息\n");
-            contextBuilder.append("5. 回答控制在 200 字以内\n\n");
+
+            // 如果知识库命中了内容，优先使用知识库
+            String referenceContent = (contextContent != null && !contextContent.trim().isEmpty())
+                    ? contextContent : knowledgeContent;
+            if (referenceContent != null && !referenceContent.trim().isEmpty()) {
+                contextBuilder.append("=== 知识库参考内容 ===\n");
+                contextBuilder.append(referenceContent);
+                contextBuilder.append("\n===================\n\n");
+                contextBuilder.append("重要：以上是从知识库中搜索到的参考内容，请基于这些内容回答用户的问题。\n");
+                contextBuilder.append("回答要求:\n");
+                contextBuilder.append("1. 充分利用知识库中的信息，给出详细的步骤和操作说明\n");
+                contextBuilder.append("2. 保留知识库中的关键命令、代码、配置信息，用代码块格式展示\n");
+                contextBuilder.append("3. 使用 Markdown 格式组织回答\n");
+                contextBuilder.append("4. 不要说\"知识库未找到相关内容\"，因为知识库已搜索到了以上内容\n\n");
+            } else {
+                contextBuilder.append("回答要求:\n");
+                contextBuilder.append("1. 语气友好、专业、简洁\n");
+                contextBuilder.append("2. 如果是查询公司信息 (如华为、浪潮等),提供基本的企业介绍\n");
+                contextBuilder.append("3. 如果是问候语，礼貌回应\n");
+                contextBuilder.append("4. 如果问题不明确，引导用户提供更详细的信息\n");
+                contextBuilder.append("5. 回答控制在 200 字以内\n\n");
+            }
 
             // 添加用户画像个性化提示
             String personalizedPrompt = userProfileService.getPersonalizedPrompt(userId);
@@ -621,19 +743,18 @@ public class AgentController {
                 contextBuilder.append(personalizedPrompt).append("\n");
             }
             
-            // 添加历史对话上下文
-            if (!recentMessages.isEmpty()) {
-                contextBuilder.append("历史对话:\n");
-                for (Msg msg : recentMessages) {
-                    contextBuilder.append(msg.getTextContent()).append("\n");
-                }
+            // 添加当前会话的历史对话上下文（仅当前会话）
+            String conversationContext = formatConversationContext(conversationMessages);
+            if (!conversationContext.isEmpty()) {
+                contextBuilder.append(conversationContext);
                 contextBuilder.append("\n当前问题:").append(message).append("\n助手回答:");
             } else {
                 contextBuilder.append("用户消息:").append(message).append("\n助手回答:");
             }
             
-            // 调用大模型获取回复 (使用包含上下文的提示词)
-            String response = callDashScopeModel(contextBuilder.toString());
+            // 调用大模型获取回复（如果有知识库内容，使用较大 maxTokens）
+            int maxTokens = (referenceContent != null) ? 4096 : 2048;
+            String response = callDashScopeModel(contextBuilder.toString(), maxTokens);
             
             // 如果大模型返回为空或调用失败，使用兜底回复
             if (response == null || response.trim().isEmpty()) {
@@ -1079,10 +1200,10 @@ public class AgentController {
                   .replace("\\t", "\t");
     }
 
-    private String handleDataRequest(String message, Long userId) {
+    private String handleDataRequest(String message, Long userId, Long conversationId) {
         try {
-            // 获取最近的历史对话作为上下文
-            List<Msg> recentMessages = memoryService.getRecentMessages(userId, 5);
+            // 获取当前会话的历史消息（仅当前会话）
+            List<MessageEntity> conversationMessages = getConversationContext(conversationId, 5);
             
             // 构造智能查数回复提示词 (包含上下文)
             StringBuilder promptBuilder = new StringBuilder();
@@ -1093,18 +1214,15 @@ public class AgentController {
             promptBuilder.append("2. 建议用户通过正式的数据报表系统查询\n");
             promptBuilder.append("3. 语气专业、友好\n\n");
             
-            // 添加历史上下文
-            if (!recentMessages.isEmpty()) {
-                promptBuilder.append("历史对话:\n");
-                for (Msg msg : recentMessages) {
-                    promptBuilder.append(msg.getTextContent()).append("\n");
-                }
-                promptBuilder.append("\n");
+            // 添加当前会话历史上下文
+            String conversationContext = formatConversationContext(conversationMessages);
+            if (!conversationContext.isEmpty()) {
+                promptBuilder.append(conversationContext).append("\n");
             }
             
             promptBuilder.append("用户消息:").append(message).append("\n助手回答:");
             
-            String response = callDashScopeModel(promptBuilder.toString());
+            String response = callDashScopeModel(promptBuilder.toString(), 2048);
             
             if (response != null && !response.trim().isEmpty()) {
                 return formatResponseText(response.trim());
@@ -1116,42 +1234,161 @@ public class AgentController {
         return "智能查数功能正在开发中，敬请期待！目前建议您通过企业的数据报表系统或联系财务部门获取相关数据。";
     }
 
-    private String handleKnowledgeRequest(String message, Long userId) {
+    /**
+     * 存储最近一次知识库搜索结果（用于在 chat 方法中获取参考信息）
+     */
+    private final ThreadLocal<SirchmunkService.SirchmunkSearchResult> lastKnowledgeSearchResult = new ThreadLocal<>();
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
+    private String handleKnowledgeRequest(String message, Long userId, Long conversationId) {
         try {
-            // 获取最近的历史对话作为上下文
-            List<Msg> recentMessages = memoryService.getRecentMessages(userId, 5);
+            // 1. 先从 Sirchmunk 知识库搜索相关内容
+            SirchmunkService.SirchmunkSearchResult searchResult = null;
+            String knowledgeContent = null;
+            String contextContent = null;
             
-            // 构造知识库回复提示词 (包含上下文)
-            StringBuilder promptBuilder = new StringBuilder();
-            promptBuilder.append("你是企业知识库助手。请根据用户的问题，提供专业的知识库查询服务。\n\n");
-            promptBuilder.append("注意：目前知识库功能正在完善中，对于常见问题请尽量提供帮助。\n\n");
-            promptBuilder.append("回答要求:\n");
-            promptBuilder.append("1. 语气专业、友好\n");
-            promptBuilder.append("2. 如果问题涉及公司制度、流程、文档等，说明知识库正在建设中\n");
-            promptBuilder.append("3. 提供可能的解决方向或建议\n");
-            promptBuilder.append("4. 引导用户联系相关部门获取准确信息\n\n");
-            
-            // 添加历史上下文
-            if (!recentMessages.isEmpty()) {
-                promptBuilder.append("历史对话:\n");
-                for (Msg msg : recentMessages) {
-                    promptBuilder.append(msg.getTextContent()).append("\n");
+            try {
+                searchResult = sirchmunkService.search(message);
+                logger.info("知识库搜索返回 - searchResult={}, hasContent={}",
+                        searchResult != null ? "非null" : "null",
+                        searchResult != null ? searchResult.hasContent() : "N/A");
+                if (searchResult != null && searchResult.hasContent()) {
+                    knowledgeContent = searchResult.getSummary();
+                    // 获取完整的 context 内容用于更丰富的回答
+                    if (searchResult.getContext() != null) {
+                        Object ctx = searchResult.getContext();
+                        if (ctx instanceof String) {
+                            contextContent = (String) ctx;
+                        } else {
+                            // Map/List 等复杂对象使用 JSON 序列化，确保大模型能正确理解
+                            contextContent = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(ctx);
+                        }
+                    }
+                    logger.info("Sirchmunk 知识库搜索到相关内容，summary长度：{}，context长度：{}",
+                            knowledgeContent != null ? knowledgeContent.length() : 0,
+                            contextContent != null ? contextContent.length() : 0);
+                    // 保存搜索结果，供 chat 方法获取参考信息
+                    lastKnowledgeSearchResult.set(searchResult);
+                } else {
+                    logger.warn("知识库搜索结果为空或无内容 - searchResult={}, summary={}, context={}",
+                            searchResult != null ? "非null(success=" + searchResult.isSuccess() + ")" : "null",
+                            searchResult != null && searchResult.getSummary() != null ? "长度" + searchResult.getSummary().length() : "null",
+                            searchResult != null && searchResult.getContext() != null ? "类型" + searchResult.getContext().getClass().getSimpleName() : "null");
                 }
-                promptBuilder.append("\n");
+            } catch (Exception e) {
+                logger.warn("Sirchmunk 知识库搜索失败：{}", e.getMessage());
+            }
+            
+            // 2. 获取当前会话的历史消息（仅当前会话，避免跨会话污染）
+            List<MessageEntity> conversationMessages = getConversationContext(conversationId, 5);
+            
+            // 3. 构造知识库回复提示词（包含知识库内容和上下文）
+            StringBuilder promptBuilder = new StringBuilder();
+            promptBuilder.append("你是企业知识库助手。请根据用户的问题和提供的知识库内容，提供详细、专业的回复。\n\n");
+            
+            // 优先使用 context 完整内容，其次使用 summary
+            String referenceContent = (contextContent != null && !contextContent.trim().isEmpty())
+                    ? contextContent : knowledgeContent;
+            
+            logger.info("知识库最终判断 - contextContent={}, knowledgeContent={}, referenceContent={}",
+                    contextContent != null ? "长度" + contextContent.length() : "null",
+                    knowledgeContent != null ? "长度" + knowledgeContent.length() : "null",
+                    referenceContent != null ? "长度" + referenceContent.length() : "null");
+
+            if (referenceContent != null && !referenceContent.trim().isEmpty()) {
+                logger.info(">>> 进入【知识库已找到】分支，将基于知识库内容生成回复");
+                promptBuilder.append("=== 知识库参考内容 ===\n");
+                promptBuilder.append(referenceContent);
+                promptBuilder.append("\n===================\n\n");
+                promptBuilder.append("重要：以上是从知识库中搜索到的参考内容，请务必基于这些内容回答用户的问题。\n");
+                promptBuilder.append("要求:\n");
+                promptBuilder.append("1. 充分利用知识库中的信息，给出详细的步骤和操作说明\n");
+                promptBuilder.append("2. 保留知识库中的关键命令、代码、配置信息，用代码块格式展示\n");
+                promptBuilder.append("3. 使用 Markdown 格式组织回答，包括标题、列表、代码块等\n");
+                promptBuilder.append("4. 如果知识库中有分步骤的操作流程，按步骤详细展开说明\n");
+                promptBuilder.append("5. 对关键注意事项、风险点进行提醒和强调\n");
+                promptBuilder.append("6. 如果知识库内容不够完整，可以补充专业建议\n");
+                promptBuilder.append("7. 不要简单概括，要尽量详细和完整\n");
+                promptBuilder.append("8. 不要说\"知识库未找到相关内容\"，因为知识库已搜索到了以上内容\n\n");
+            } else {
+                logger.warn(">>> 进入【知识库未找到】分支，referenceContent 为空，将使用通用知识回答");
+                promptBuilder.append("注意：知识库搜索未返回相关内容，请根据你的通用知识回答。\n\n");
+                promptBuilder.append("回答要求:\n");
+                promptBuilder.append("1. 语气专业、友好\n");
+                promptBuilder.append("2. 说明知识库中暂未找到直接相关内容\n");
+                promptBuilder.append("3. 根据通用知识提供尽可能详细的解答\n");
+                promptBuilder.append("4. 使用 Markdown 格式组织回答\n");
+                promptBuilder.append("5. 引导用户联系相关部门获取更准确的信息\n\n");
+            }
+            
+            // 添加当前会话历史上下文（仅当前会话）
+            String conversationContext = formatConversationContext(conversationMessages);
+            if (!conversationContext.isEmpty()) {
+                promptBuilder.append(conversationContext).append("\n");
             }
             
             promptBuilder.append("用户消息:").append(message).append("\n助手回答:");
             
-            String response = callDashScopeModel(promptBuilder.toString());
+            // 4. 调用大模型进行润色和整合（使用较大的 maxTokens 以生成详细完整的回复）
+            String response = callDashScopeModel(promptBuilder.toString(), 4096);
             
             if (response != null && !response.trim().isEmpty()) {
                 return formatResponseText(response.trim());
             }
         } catch (Exception e) {
-            System.err.println("知识库回复失败:" + e.getMessage());
+            logger.error("知识库回复失败:{}", e.getMessage());
         }
         
+        // 兜底回复
         return "知识库功能正在开发中，敬请期待！目前我可以帮您解答一些常见问题，或者您可以联系相关部门获取更准确的信息。";
+    }
+
+    /**
+     * 获取当前会话的历史消息作为上下文
+     * 只获取当前会话的消息，避免跨会话上下文污染
+     *
+     * @param conversationId 当前会话ID
+     * @param limit 最多返回的消息条数
+     * @return 当前会话的历史消息列表
+     */
+    private List<MessageEntity> getConversationContext(Long conversationId, int limit) {
+        if (conversationId == null) {
+            return Collections.emptyList();
+        }
+        try {
+            List<MessageEntity> allMessages = chatHistoryService.getMessages(conversationId);
+            if (allMessages == null || allMessages.isEmpty()) {
+                return Collections.emptyList();
+            }
+            // 取最近 limit 条（排除最后一条，因为是刚刚保存的当前用户消息）
+            int size = allMessages.size();
+            int fromIndex = Math.max(0, size - limit - 1);
+            int toIndex = Math.max(0, size - 1); // 排除最后一条（当前用户消息）
+            if (fromIndex >= toIndex) {
+                return Collections.emptyList();
+            }
+            return allMessages.subList(fromIndex, toIndex);
+        } catch (Exception e) {
+            logger.warn("获取会话 {} 的历史消息失败：{}", conversationId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 将会话消息列表格式化为上下文文本
+     */
+    private String formatConversationContext(List<MessageEntity> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("当前对话历史:\n");
+        for (MessageEntity msg : messages) {
+            String roleLabel = "user".equals(msg.getRole()) ? "用户" : "助手";
+            sb.append(roleLabel).append(": ").append(msg.getContent()).append("\n");
+        }
+        return sb.toString();
     }
 
     private String handlePartyRequest(String message) {
